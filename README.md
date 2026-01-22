@@ -211,4 +211,4 @@ PRs welcome! Please open an issue first to discuss changes.
 
 ---
 
-Made with ❤️ by [Federico De Ponte](https://github.com/federicodeponte)
+Made with ❤️ by [SCAILE Technologies](https://scaile.tech)
