@@ -22,13 +22,16 @@
       "require": "./dist/server.js"
     }
   },
+  "bin": {
+    "openfeedbacklayer": "./dist/cli.mjs"
+  },
   "files": [
     "dist",
     "src",
     "supabase/migrations"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "rm -rf dist && tsup",
     "dev": "tsup --watch",
     "lint": "eslint src/",
     "type-check": "tsc --noEmit",

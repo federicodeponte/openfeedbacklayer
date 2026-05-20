@@ -269,7 +269,23 @@ export async function handleFeedback(request: Request, deps: FeedbackDeps): Prom
       .single()
 
     if (error || !feedback) {
-      console.error('[Feedback] Database error:', error)
+      // PostgrestError carries .message / .code / .details / .hint as
+      // non-enumerable properties, so the default console.error of the
+      // object renders as `{}` and hides the actual cause. Spread the
+      // useful fields so dev logs are debuggable when supabase-js fails.
+      const errAny = error as unknown as Record<string, unknown> | null
+      console.error('[Feedback] Database error:', {
+        errorIsNull: error === null,
+        feedbackIsNull: !feedback,
+        message: errAny?.message,
+        code: errAny?.code,
+        details: errAny?.details,
+        hint: errAny?.hint,
+        status: errAny?.status,
+        name: errAny?.name,
+        errorKeys: errAny ? Object.keys(errAny) : null,
+        errorJSON: errAny ? JSON.stringify(errAny, Object.getOwnPropertyNames(errAny)) : null,
+      })
       return json({ error: 'Failed to save feedback' }, { status: 500 })
     }
 

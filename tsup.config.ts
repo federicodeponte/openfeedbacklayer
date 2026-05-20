@@ -14,6 +14,10 @@ const SHARED = {
   treeshake: true,
 }
 
+// `clean: true` on any tsup config wipes the WHOLE dist folder, so when
+// multiple configs run in parallel a later config's output can be deleted
+// by an earlier config that started after it. We pre-clean once via the
+// package.json build script, then every config uses `clean: false`.
 export default defineConfig([
   {
     ...SHARED,
@@ -21,7 +25,7 @@ export default defineConfig([
       index: 'src/index.ts',
       widget: 'src/components/FeedbackWidget.tsx',
     },
-    clean: true,
+    clean: false,
     // Post-build: prepend "use client" to every emitted client bundle so
     // Next App Router server components can import FeedbackWidget directly.
     // tsup's `banner` option silently no-ops here (8.5.1), so do it
@@ -49,5 +53,31 @@ export default defineConfig([
     ...SHARED,
     entry: { server: 'src/server/index.ts' },
     clean: false,
+  },
+  {
+    // CLI bundle: ESM-only since it targets `npx openfeedbacklayer`.
+    // Shipped as dist/cli.mjs which the package.json `bin` entry points
+    // at. The shebang gets prepended in onSuccess because tsup's `banner`
+    // option emits it INSIDE the bundle where esbuild's post-pass then
+    // chokes on the `#!` line.
+    ...SHARED,
+    entry: { cli: 'src/cli/index.ts' },
+    format: ['esm'] as const,
+    dts: false,
+    clean: false,
+    async onSuccess() {
+      const fs = await import('node:fs/promises')
+      const path = await import('node:path')
+      const p = path.join('dist', 'cli.mjs')
+      try {
+        const body = await fs.readFile(p, 'utf8')
+        if (!body.startsWith('#!')) {
+          await fs.writeFile(p, '#!/usr/bin/env node\n' + body, 'utf8')
+        }
+        await fs.chmod(p, 0o755)
+      } catch {
+        // file missing (e.g. partial build) — skip
+      }
+    },
   },
 ])

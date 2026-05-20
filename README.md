@@ -263,6 +263,34 @@ Using Gemini 2.5 Flash Lite:
 - Google Gemini 2.5 Flash Lite
 - Resend (optional, for emails)
 
+## CLI
+
+The widget ships with a CLI for non-browser submissions — useful from CI,
+shell scripts, or AI agents that need to file feedback against a deployed
+endpoint without rendering React.
+
+```bash
+# Quick send (uses OFL_API_URL or defaults to http://localhost:3000/api/feedback)
+npx openfeedbacklayer send "Dark-mode toggle is broken on the settings page."
+
+# With email + subscribe to journey updates
+npx openfeedbacklayer send "Export hangs at 90%" \
+  --email you@example.com --subscribe
+
+# Pipe from stdin (great for piping AI-agent output or log snippets)
+echo "Sync failed after upgrade to 0.7.2" | npx openfeedbacklayer send
+
+# Aim at a non-local endpoint
+npx openfeedbacklayer send "..." --api-url https://app.example.com/api/feedback
+
+# Get machine-readable JSON (id, ai_data, github_issue_url, ...)
+npx openfeedbacklayer send "..." --json
+```
+
+Env vars: `OFL_API_URL`, `OFL_EMAIL`, `OFL_PROJECT`. Exit codes: `0` success,
+`1` usage error, `2` network error, `3` server error. Run
+`npx openfeedbacklayer --help` for the full reference.
+
 ## License
 
 MIT
