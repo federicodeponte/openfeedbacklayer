@@ -11,8 +11,16 @@ export interface FeedbackData {
   ai_data?: FeedbackAIData | null
   project_id?: string
   status?: 'new' | 'in_progress' | 'resolved' | 'closed'
+  submitter_email?: string | null
+  subscribe?: boolean
+  github_issue_number?: number | null
+  github_issue_url?: string | null
+  journey_stage?: JourneyStage
+  last_emailed_stage?: JourneyStage | null
   created_at?: string
 }
+
+export type JourneyStage = 'received' | 'triaged' | 'in_progress' | 'shipped' | 'wont_fix'
 
 export interface FeedbackAIData {
   title: string
@@ -40,6 +48,10 @@ export interface FeedbackWidgetProps {
   buttonText?: string
   /** Custom placeholder for the message input */
   placeholder?: string
+  /** Collect an optional submitter email (default: true) */
+  collectEmail?: boolean
+  /** Custom placeholder for the email input */
+  emailPlaceholder?: string
   /** Called after feedback is successfully submitted */
   onSubmit?: (data: FeedbackData) => void
   /** Called on error */

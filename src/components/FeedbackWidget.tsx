@@ -5,8 +5,8 @@
  * A floating feedback button with AI classification
  */
 
-import React, { useState, useRef, useEffect } from 'react'
-import type { FeedbackWidgetProps, FeedbackData } from '../lib/types'
+import React, { useState, useRef, useEffect, useId } from 'react'
+import type { FeedbackWidgetProps } from '../lib/types'
 
 const DEFAULT_COLORS = {
   primary: '#2563eb', // blue-600
@@ -25,6 +25,8 @@ export function FeedbackWidget({
   primaryColor = DEFAULT_COLORS.primary,
   buttonText = 'Feedback',
   placeholder = 'Describe your feedback, bug, or feature request...',
+  collectEmail = true,
+  emailPlaceholder = 'Your email (optional, to hear back)',
   onSubmit,
   onError,
 }: FeedbackWidgetProps) {
@@ -34,7 +36,10 @@ export function FeedbackWidget({
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
   const [isSent, setIsSent] = useState(false)
+  const [email, setEmail] = useState('')
+  const [subscribe, setSubscribe] = useState(false)
   const [aiResponse, setAiResponse] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [classification, setClassification] = useState<{
     category: string
     feature_area: string
@@ -42,6 +47,17 @@ export function FeedbackWidget({
   } | null>(null)
   const [honeypot, setHoneypot] = useState('')
 
+  const reactId = useId()
+  const instanceId = reactId.replace(/:/g, '')
+  const popupId = `ofl-popup-${instanceId}`
+  const titleId = `ofl-title-${instanceId}`
+  const descriptionId = `ofl-description-${instanceId}`
+  const messageId = `ofl-msg-${instanceId}`
+  const emailId = `ofl-email-${instanceId}`
+  const subscribeId = `ofl-subscribe-${instanceId}`
+
+  const fabRef = useRef<HTMLButtonElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -53,21 +69,82 @@ export function FeedbackWidget({
     'top-left': { top: 20, left: 20 },
   }
 
+  const popupAnchorStyles: Record<string, React.CSSProperties> = {
+    'bottom-right': { bottom: 0, right: 0 },
+    'bottom-left': { bottom: 0, left: 0 },
+    'top-right': { top: 0, right: 0 },
+    'top-left': { top: 0, left: 0 },
+  }
+
   // Reset state when closing
   const handleClose = () => {
+    const wasSent = isSent
+    const hadError = Boolean(error)
+
     setIsOpen(false)
-    if (isSent) {
+    window.setTimeout(() => {
+      fabRef.current?.focus()
+    }, 0)
+
+    if (wasSent) {
       // Reset after closing sent state
       setTimeout(() => {
         setMessage('')
         setScreenshotFile(null)
         setScreenshotPreview(null)
+        setEmail('')
+        setSubscribe(false)
         setIsSent(false)
+        setError(null)
         setAiResponse(null)
         setClassification(null)
       }, 300)
+    } else if (hadError) {
+      setTimeout(() => {
+        setError(null)
+      }, 300)
     }
   }
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        handleClose()
+        return
+      }
+
+      if (event.key !== 'Tab') return
+
+      const focusable = Array.from(
+        popupRef.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, textarea, [tabindex]:not([tabindex="-1"])'
+        ) || []
+      ).filter((element) =>
+        !element.hasAttribute('disabled') &&
+        element.tabIndex !== -1 &&
+        element.getClientRects().length > 0
+      )
+
+      if (focusable.length === 0) return
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, isSent, error])
 
   // Handle paste for screenshots
   useEffect(() => {
@@ -122,11 +199,18 @@ export function FeedbackWidget({
     if (!message.trim() || isSending) return
 
     setIsSending(true)
+    setError(null)
+    const trimmedEmail = email.trim()
 
     try {
       const formData = new FormData()
       formData.append('message', message)
       formData.append('website', honeypot) // Honeypot field
+      formData.append('subscribe', subscribe && trimmedEmail ? 'true' : 'false')
+
+      if (trimmedEmail) {
+        formData.append('email', trimmedEmail)
+      }
 
       if (projectId) {
         formData.append('project', projectId)
@@ -175,17 +259,14 @@ export function FeedbackWidget({
           message_raw: message,
           page_url: typeof window !== 'undefined' ? window.location.href : '',
           ai_data: aiData,
+          submitter_email: trimmedEmail || null,
+          subscribe: Boolean(subscribe && trimmedEmail),
         })
       }
     } catch (error) {
       console.error('[OpenFeedbackLayer] Send error:', error)
-      setClassification({
-        category: 'feedback',
-        feature_area: 'general',
-        priority: 'P1',
-      })
-      setAiResponse('Thank you for your feedback!')
-      setIsSent(true)
+      setError("We couldn't send your feedback right now.")
+      setIsSent(false)
 
       if (onError && error instanceof Error) {
         onError(error)
@@ -201,6 +282,8 @@ export function FeedbackWidget({
       position: 'fixed' as const,
       zIndex: 99999,
       fontFamily: 'system-ui, -apple-system, sans-serif',
+      width: 48,
+      height: 48,
       ...positionStyles[position],
     },
     button: {
@@ -217,7 +300,10 @@ export function FeedbackWidget({
       transition: 'transform 0.2s, box-shadow 0.2s',
     },
     popup: {
+      position: 'absolute' as const,
       width: 320,
+      // iPhone SE (320px viewport) was previously flush to the edge / overflowing.
+      maxWidth: 'calc(100vw - 24px)',
       maxHeight: '75vh',
       backgroundColor: DEFAULT_COLORS.bg,
       borderRadius: 12,
@@ -240,12 +326,27 @@ export function FeedbackWidget({
       margin: 0,
     },
     closeButton: {
+      fontFamily: 'inherit',
       background: 'none',
       border: 'none',
       cursor: 'pointer',
-      padding: 4,
+      width: 44,
+      height: 44,
+      padding: 10,
       color: DEFAULT_COLORS.textMuted,
       fontSize: 18,
+      lineHeight: 1,
+    },
+    srOnly: {
+      position: 'absolute' as const,
+      width: 1,
+      height: 1,
+      padding: 0,
+      margin: -1,
+      overflow: 'hidden',
+      clip: 'rect(0, 0, 0, 0)',
+      whiteSpace: 'nowrap' as const,
+      border: 0,
     },
     body: {
       padding: 16,
@@ -263,6 +364,36 @@ export function FeedbackWidget({
       fontFamily: 'inherit',
       boxSizing: 'border-box' as const,
     },
+    emailInput: {
+      width: '100%',
+      height: 40,
+      padding: '8px 12px',
+      border: `1px solid ${DEFAULT_COLORS.border}`,
+      borderRadius: 8,
+      fontSize: 14,
+      fontFamily: 'inherit',
+      boxSizing: 'border-box' as const,
+      marginTop: 8,
+    },
+    subscribeRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 8,
+      color: DEFAULT_COLORS.textMuted,
+      fontSize: 12,
+    },
+    subscribeLabel: {
+      color: DEFAULT_COLORS.textMuted,
+      fontSize: 12,
+      cursor: 'pointer',
+    },
+    checkbox: {
+      fontFamily: 'inherit',
+      width: 14,
+      height: 14,
+      margin: 0,
+    },
     screenshotPreview: {
       marginTop: 8,
       position: 'relative' as const,
@@ -275,11 +406,12 @@ export function FeedbackWidget({
       border: `1px solid ${DEFAULT_COLORS.border}`,
     },
     removeButton: {
+      fontFamily: 'inherit',
       position: 'absolute' as const,
       top: 4,
       right: 4,
-      width: 24,
-      height: 24,
+      width: 44,
+      height: 44,
       borderRadius: '50%',
       backgroundColor: 'rgba(0,0,0,0.6)',
       color: 'white',
@@ -296,8 +428,10 @@ export function FeedbackWidget({
       marginTop: 12,
     },
     actionButton: {
+      fontFamily: 'inherit',
       flex: 1,
       padding: '10px 16px',
+      minHeight: 44,
       borderRadius: 8,
       border: 'none',
       cursor: 'pointer',
@@ -337,6 +471,18 @@ export function FeedbackWidget({
       fontSize: 24,
       margin: '0 auto 16px',
     },
+    errorMark: {
+      width: 48,
+      height: 48,
+      borderRadius: '50%',
+      backgroundColor: '#dc2626',
+      color: 'white',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 24,
+      margin: '0 auto 16px',
+    },
     hint: {
       fontSize: 12,
       color: DEFAULT_COLORS.textMuted,
@@ -346,36 +492,80 @@ export function FeedbackWidget({
 
   return (
     <div style={styles.container}>
-      {!isOpen ? (
-        // Closed state - floating button
-        <button
-          style={styles.button}
-          onClick={() => setIsOpen(true)}
-          title={buttonText}
-          aria-label={buttonText}
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-        </button>
-      ) : (
+      <button
+        ref={fabRef}
+        style={styles.button}
+        onClick={() => setIsOpen(true)}
+        title={buttonText}
+        aria-label={buttonText}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        aria-controls={popupId}
+        tabIndex={isOpen ? -1 : 0}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      </button>
+
+      {isOpen && (
         // Open state - popup
-        <div style={styles.popup}>
+        <div
+          ref={popupRef}
+          id={popupId}
+          style={{ ...styles.popup, ...popupAnchorStyles[position] }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+        >
           <div style={styles.header}>
-            <h3 style={styles.title}>Send feedback</h3>
-            <button style={styles.closeButton} onClick={handleClose}>
+            <h3 id={titleId} style={styles.title}>Send feedback</h3>
+            <button style={styles.closeButton} onClick={handleClose} aria-label="Close feedback">
               ×
             </button>
           </div>
 
           <div style={styles.body}>
-            {isSent ? (
+            <p id={descriptionId} style={styles.srOnly}>
+              Send a feedback message with an optional screenshot and email address.
+            </p>
+
+            {error ? (
+              <div style={styles.successMessage} role="alert" aria-live="assertive">
+                <div style={styles.errorMark}>✕</div>
+                <p style={{ fontSize: 14, color: DEFAULT_COLORS.text, marginBottom: 12 }}>
+                  {error}
+                </p>
+                <div style={styles.actions}>
+                  <button
+                    style={{ ...styles.actionButton, ...styles.primaryButton }}
+                    onClick={handleSend}
+                    disabled={isSending}
+                  >
+                    {isSending ? 'Sending...' : 'Retry'}
+                  </button>
+                  <button
+                    style={{ ...styles.actionButton, ...styles.secondaryButton }}
+                    onClick={handleClose}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : isSent ? (
               // Success state
-              <div style={styles.successMessage}>
+              <div style={styles.successMessage} role="status" aria-live="polite">
                 <div style={styles.checkmark}>✓</div>
                 <p style={{ fontSize: 14, color: DEFAULT_COLORS.text, marginBottom: 12 }}>
                   {aiResponse}
                 </p>
+                {email.trim() && subscribe && (
+                  <p style={{ fontSize: 12, color: DEFAULT_COLORS.textMuted, marginTop: -4, marginBottom: 12 }}>
+                    We'll email you at{' '}
+                    <span style={{ wordBreak: 'break-all' }}>{email.trim()}</span> with updates.
+                  </p>
+                )}
                 {classification && (
                   <div>
                     <span
@@ -451,20 +641,65 @@ export function FeedbackWidget({
                   onDragOver={(e) => e.preventDefault()}
                 >
                   <textarea
+                    id={messageId}
+                    name="message"
                     ref={textareaRef}
                     style={styles.textarea}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={placeholder}
+                    aria-required="true"
+                    aria-label="Feedback message"
                     autoFocus
                   />
                 </div>
+
+                {collectEmail && (
+                  <>
+                    <input
+                      id={emailId}
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      style={styles.emailInput}
+                      value={email}
+                      onChange={(e) => {
+                        const wasEmpty = email.trim().length === 0
+                        const nextEmail = e.target.value
+                        setEmail(nextEmail)
+
+                        if (!nextEmail.trim()) {
+                          setSubscribe(false)
+                        } else if (wasEmpty) {
+                          setSubscribe(true)
+                        }
+                      }}
+                      placeholder={emailPlaceholder}
+                      aria-label={emailPlaceholder}
+                    />
+                    <div style={styles.subscribeRow}>
+                      <input
+                        id={subscribeId}
+                        name="subscribe"
+                        type="checkbox"
+                        style={styles.checkbox}
+                        checked={Boolean(email.trim() && subscribe)}
+                        disabled={!email.trim()}
+                        onChange={(e) => setSubscribe(e.target.checked)}
+                      />
+                      <label htmlFor={subscribeId} style={styles.subscribeLabel}>
+                        Email me when this is addressed
+                      </label>
+                    </div>
+                  </>
+                )}
 
                 {screenshotPreview && (
                   <div style={styles.screenshotPreview}>
                     <img src={screenshotPreview} alt="Screenshot" style={styles.previewImage} />
                     <button
                       style={styles.removeButton}
+                      aria-label="Remove screenshot"
                       onClick={() => {
                         setScreenshotFile(null)
                         setScreenshotPreview(null)

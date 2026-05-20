@@ -7,40 +7,62 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./widget": {
+      "types": "./dist/widget.d.ts",
       "import": "./dist/widget.mjs",
-      "require": "./dist/widget.js",
-      "types": "./dist/widget.d.ts"
+      "require": "./dist/widget.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
     }
   },
   "files": [
     "dist",
     "src",
-    "supabase"
+    "supabase/migrations"
   ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint src/",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "peerDependencies": {
+    "@supabase/supabase-js": ">=2.0.0",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@supabase/supabase-js": {
+      "optional": false
+    }
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0"
   },
+  "overrides": {
+    "postcss": "8.5.10"
+  },
   "devDependencies": {
+    "eslint": "10.4.0",
+    "@octokit/rest": "21.1.1",
+    "@supabase/supabase-js": "2.106.0",
+    "@types/node": "20.19.41",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "next": "15.5.18",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "resend": "4.8.0",
     "tsup": "^8.0.0",
+    "typescript-eslint": "8.59.4",
     "typescript": "^5.3.0"
   },
   "keywords": [
@@ -57,10 +79,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/federicodeponte/openfeedbacklayer.git"
+    "url": "git+https://github.com/federicodeponte/openfeedbacklayer.git"
   },
   "homepage": "https://github.com/federicodeponte/openfeedbacklayer#readme",
   "bugs": {
     "url": "https://github.com/federicodeponte/openfeedbacklayer/issues"
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "test"
   }
 }
