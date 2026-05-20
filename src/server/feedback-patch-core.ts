@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { refineFeedback } from '../lib/ai-service'
+import { analyzeFeedback, refineFeedback } from '../lib/ai-service'
 import type { FeedbackAIData } from '../lib/types'
 import type { ServerEnv } from './feedback-core'
 
@@ -31,6 +31,10 @@ export interface PatchFeedbackDeps {
   env: ServerEnv
   /** Injection point for the refine call so tests can stub Gemini. */
   refine: typeof refineFeedback
+  /** Fallback path when there's no prior aiData (e.g. Gemini was 503'd
+   *  on submit): we classify the combined (original + follow-up) text
+   *  fresh instead of refining a non-existent prior. */
+  analyze: typeof analyzeFeedback
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -45,7 +49,12 @@ function getSupabaseAdmin(env: ServerEnv) {
 }
 
 export function realPatchDeps(env: ServerEnv = process.env): PatchFeedbackDeps {
-  return { supabase: getSupabaseAdmin(env), env, refine: refineFeedback }
+  return {
+    supabase: getSupabaseAdmin(env),
+    env,
+    refine: refineFeedback,
+    analyze: analyzeFeedback,
+  }
 }
 
 function json(body: unknown, init?: ResponseInit): Response {
@@ -126,17 +135,17 @@ export async function handlePatch(
       }
 
       const prior = (existing.ai_data as FeedbackAIData | null) || null
-      if (!prior) {
-        return json({ error: 'No prior AI analysis to refine' }, { status: 409 })
-      }
-
       const messageRaw = (existing.message_raw as string | null) || ''
-      const refined = await deps.refine({
-        messageRaw,
-        followUp,
-        prior,
-        geminiApiKey,
-      })
+      // If we have a prior aiData, ask the model to CORRECT it given the
+      // follow-up. Otherwise (Gemini was 503'd on submit, or the env didn't
+      // have GEMINI_API_KEY then) classify (original + follow-up) fresh —
+      // returning a 409 here would dead-end the user with no recourse.
+      const refined = prior
+        ? await deps.refine({ messageRaw, followUp, prior, geminiApiKey })
+        : await deps.analyze({
+            messageRaw: `${messageRaw}\n\n[Submitter follow-up]: ${followUp}`,
+            geminiApiKey,
+          })
 
       if (!refined) {
         return json(

@@ -58,6 +58,15 @@ export interface FeedbackWidgetProps {
   onSubmit?: (data: FeedbackData) => void
   /** Called on error */
   onError?: (error: Error) => void
+  /**
+   * Render the "Tracked as issue #N" line in the success state as a
+   * clickable link to the GitHub issue. Default: false — most deployments
+   * point GITHUB_FEEDBACK_REPO at a PRIVATE repo (floomhq/skills-neo,
+   * etc.), in which case the link 404s for the submitter and damages
+   * trust. Set this true only when you've confirmed the issues repo is
+   * publicly readable.
+   */
+  publicIssueTracker?: boolean
 }
 
 export interface FeedbackConfig {

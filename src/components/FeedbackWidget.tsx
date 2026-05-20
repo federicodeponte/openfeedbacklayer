@@ -539,6 +539,7 @@ export function FeedbackWidget({
   emailPlaceholder = 'Your email (optional, to hear back)',
   onSubmit,
   onError,
+  publicIssueTracker = false,
 }: FeedbackWidgetProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [message, setMessage] = useState('')
@@ -1017,7 +1018,11 @@ export function FeedbackWidget({
                     <>
                       <br />
                       Tracked as{' '}
-                      {githubIssueUrl ? (
+                      {publicIssueTracker && githubIssueUrl ? (
+                        // Only render the issue link when the host opts in
+                        // via publicIssueTracker — most production deploys
+                        // file issues into a PRIVATE maintainer repo where
+                        // the link 404s for end users.
                         <a
                           href={githubIssueUrl}
                           target="_blank"
