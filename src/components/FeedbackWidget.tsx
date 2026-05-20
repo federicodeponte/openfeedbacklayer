@@ -21,6 +21,14 @@ interface FeedbackAIDataLike {
   suggested_priority?: string
 }
 
+/**
+ * Character cap on the quoted user message in the success state.
+ * Submissions longer than this clamp + show a "Show more" toggle so
+ * a 2,000-char rant doesn't blow out the card height before the
+ * user sees the "Tracked → review within 1 day" promise.
+ */
+const QUOTE_CLAMP = 280
+
 const DEFAULT_COLORS = {
   primary: '#2563eb', // blue-600
   primaryHover: '#1d4ed8', // blue-700
@@ -201,24 +209,68 @@ const STYLES = {
     backgroundColor: DEFAULT_COLORS.border,
     color: DEFAULT_COLORS.text,
   },
-  badge: {
-    display: 'inline-block',
-    padding: '4px 8px',
-    borderRadius: 4,
-    fontSize: 12,
-    fontWeight: 500,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  aiTitle: {
-    // Headline of the success state — the AI's understood title of the
-    // issue, in the submitter's voice. Bold so it reads as "we got it",
-    // sized between the popup title and body copy.
-    fontSize: 16,
+  gotHeadline: {
+    // Headline of the success state. Warm + human ("We got your message")
+    // — not the AI's rephrase. Three independent agents converged on
+    // showing the user's own words rather than an AI summary, because
+    // the JTBD is "feel heard", which an echo accomplishes directly.
+    fontSize: 15,
     fontWeight: 600,
     color: DEFAULT_COLORS.text,
-    margin: '0 0 8px',
-    lineHeight: 1.35,
+    textAlign: 'center',
+    margin: '0 0 12px',
+    lineHeight: 1.4,
+  },
+  quotedMessage: {
+    // The submitter's own words, quoted back as proof of receipt.
+    // Clamped at QUOTE_CLAMP chars with a "Show more" toggle to keep
+    // very long submissions from blowing out the card height.
+    background: DEFAULT_COLORS.border + '40',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    padding: '12px 14px',
+    fontSize: 13,
+    lineHeight: 1.55,
+    color: DEFAULT_COLORS.text,
+    margin: '0 0 14px',
+    fontStyle: 'italic',
+    fontFamily: 'inherit',
+    border: 'none',
+  },
+  quoteShowMore: {
+    background: 'transparent',
+    border: 'none',
+    color: DEFAULT_COLORS.textMuted,
+    fontSize: 12,
+    padding: '4px 0 0',
+    margin: 0,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    textDecoration: 'underline',
+    textDecorationColor: DEFAULT_COLORS.border,
+    textUnderlineOffset: 3,
+    display: 'block',
+  },
+  promiseLine: {
+    fontSize: 13,
+    color: DEFAULT_COLORS.textMuted,
+    textAlign: 'center',
+    margin: '0 0 14px',
+    lineHeight: 1.5,
+  },
+  promiseLink: {
+    color: DEFAULT_COLORS.text,
+    fontWeight: 500,
+    textDecoration: 'underline',
+    textDecorationColor: DEFAULT_COLORS.border,
+    textUnderlineOffset: 3,
+  },
+  refineConfirm: {
+    fontSize: 12,
+    color: DEFAULT_COLORS.success,
+    textAlign: 'center',
+    margin: '0 0 12px',
+    fontWeight: 500,
   },
   successMessage: {
     textAlign: 'center',
@@ -302,32 +354,12 @@ const STYLES = {
     minHeight: 0,
     padding: '8px 14px',
   },
-  badgeRow: {
-    marginBottom: 4,
-  },
-  categoryBadge: {
-    backgroundColor: '#dbeafe',
-    color: '#1e40af',
-  },
-  featureAreaBadge: {
-    backgroundColor: '#f3e8ff',
-    color: '#7c3aed',
-  },
-  priorityHighBadge: {
-    backgroundColor: '#fee2e2',
-    color: '#dc2626',
-  },
-  priorityMediumBadge: {
-    backgroundColor: '#fef3c7',
-    color: '#d97706',
-  },
-  priorityLowBadge: {
-    backgroundColor: '#dcfce7',
-    color: '#16a34a',
-  },
   refineToggle: {
-    // Lightweight link-style button under the badges. Says "Not quite right?
-    // Add more details" — when clicked, expands the refine textarea.
+    // Quiet text link beneath the promise + subscribe section. Says
+    // "Add a detail" — clicking expands the inline refine textarea.
+    // The framing matters: the user is ADDING context, not correcting
+    // an AI summary (which was the gated "Not quite right?" framing
+    // that Kimi flagged as making the user feel like unpaid QA).
     background: 'transparent',
     border: 'none',
     color: DEFAULT_COLORS.primary,
@@ -524,23 +556,27 @@ export function FeedbackWidget({
     priority: string
   } | null>(null)
   const [honeypot, setHoneypot] = useState('')
-  // Post-submit edit state. feedbackId is returned by POST and used by PATCH
-  // for the follow-up refine flow + subscribe toggle.
+  // Post-submit state. feedbackId returned by POST is used by PATCH for the
+  // follow-up "add a detail" flow + subscribe toggle. submittedMessage is
+  // the submitter's exact original text, echoed back in the success state
+  // (this is the "We got your message" receipt — three independent agents
+  // converged on showing user-own-words rather than the AI rephrase).
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
-  // The AI's understood title is the headline of the success state - the
-  // submitter wants to know "did the AI actually understand my issue?", not
-  // just "was it categorised". Persisted so a refine round-trip can update it.
-  const [aiTitle, setAiTitle] = useState<string | null>(null)
+  const [submittedMessage, setSubmittedMessage] = useState<string>('')
+  const [githubIssueNumber, setGithubIssueNumber] = useState<number | null>(null)
+  const [githubIssueUrl, setGithubIssueUrl] = useState<string | null>(null)
+  const [quoteExpanded, setQuoteExpanded] = useState(false)
   const [patching, setPatching] = useState(false)
   // Lets a submitter who skipped the email field still subscribe to updates
-  // after seeing the success state (PR review feedback).
+  // after seeing the success state.
   const [postSubmitEmailDraft, setPostSubmitEmailDraft] = useState('')
-  // Refine flow: submitter reads the AI's summary, decides the AI missed or
-  // mis-classified something, opens the refine textarea, types a clarification,
-  // PATCH ships it to the server which re-runs Gemini.
+  // "Add a detail" escape hatch — quiet text link that expands a textarea.
+  // The follow-up PATCH re-runs Gemini server-side; the user-visible quote
+  // stays as their immutable receipt, only internal classification updates.
   const [refineOpen, setRefineOpen] = useState(false)
   const [refineDraft, setRefineDraft] = useState('')
   const [refineError, setRefineError] = useState<string | null>(null)
+  const [refineSentOk, setRefineSentOk] = useState(false)
 
 
   const reactId = useId()
@@ -584,10 +620,14 @@ export function FeedbackWidget({
         setAiResponse(null)
         setClassification(null)
         setFeedbackId(null)
-        setAiTitle(null)
+        setSubmittedMessage('')
+        setGithubIssueNumber(null)
+        setGithubIssueUrl(null)
+        setQuoteExpanded(false)
         setRefineOpen(false)
         setRefineDraft('')
         setRefineError(null)
+        setRefineSentOk(false)
       }, 300)
     } else if (hadError) {
       setTimeout(() => {
@@ -725,23 +765,28 @@ export function FeedbackWidget({
       const result = await response.json()
       const aiData = result.ai_data
       setFeedbackId(result.id || null)
+      setSubmittedMessage(message.trim())
+      setGithubIssueNumber(
+        typeof result.github_issue_number === 'number' ? result.github_issue_number : null,
+      )
+      setGithubIssueUrl(
+        typeof result.github_issue_url === 'string' ? result.github_issue_url : null,
+      )
 
+      // Internal classification is still kept in state so the post-submit
+      // PATCH /api/feedback/[id] {follow_up} round-trip can replace it on
+      // the server, but it is no longer rendered in the success card per
+      // multi-agent UX review (chips were internal triage leaking out).
       if (aiData) {
         setClassification({
           category: aiData.suggested_category || 'other',
           feature_area: aiData.suggested_feature_area || 'general',
           priority: formatPriority(aiData.suggested_priority || 'medium'),
         })
-        setAiTitle(aiData.title || null)
-        setAiResponse(aiData.short_summary || 'Thanks - your feedback is in.')
+        setAiResponse(aiData.short_summary || null)
       } else {
-        setClassification({
-          category: 'feedback',
-          feature_area: 'general',
-          priority: 'P1',
-        })
-        setAiTitle(null)
-        setAiResponse('Thanks - your feedback is in.')
+        setClassification(null)
+        setAiResponse(null)
       }
 
       setIsSent(true)
@@ -838,7 +883,10 @@ export function FeedbackWidget({
       const data = (await res.json()) as { ai_data?: FeedbackAIDataLike | null }
       const refined = data.ai_data
       if (refined) {
-        setAiTitle(refined.title || null)
+        // Server-side classification is the team's, not the user's view —
+        // we keep their original quote stable in the success state. Stash
+        // the refined classification + summary so a future surface (or
+        // dev callback via onSubmit) can read it.
         setAiResponse(refined.short_summary || aiResponse)
         setClassification({
           category: refined.suggested_category || 'other',
@@ -848,6 +896,10 @@ export function FeedbackWidget({
       }
       setRefineDraft('')
       setRefineOpen(false)
+      setRefineSentOk(true)
+      // Fade the "Thanks, added" confirmation after a few seconds so the
+      // success card returns to its clean state.
+      window.setTimeout(() => setRefineSentOk(false), 4000)
     } catch (err) {
       console.error('[OpenFeedbackLayer] Refine error:', err)
       setRefineError("We couldn't refine that - please try again.")
@@ -934,25 +986,52 @@ export function FeedbackWidget({
                 </div>
               </div>
             ) : isSent ? (
-              // Success state. The headline is the AI's understood title of
-              // the issue (what's actually wrong, in 5-8 words) — that's the
-              // signal the submitter wants ("did the AI get it right?"). The
-              // short_summary lives under it as the friendly "we got it"
-              // acknowledgement. If the AI got something wrong, the submitter
-              // opens the refine box below and sends a follow-up clarification
-              // that re-runs Gemini server-side.
+              // Success state — final synthesis after 4-agent UX review
+              // (Claude+Codex+Kimi+NVIDIA). The headline is "We got your
+              // message" + the user's own quoted text as proof of receipt,
+              // followed by a human "we'll review within 1 day" promise +
+              // GitHub issue link. AI title / short_summary / category /
+              // priority chips all stayed internal (team-side only).
               <div className={cls('successMessage')} role="status" aria-live="polite">
                 <div className={cls('checkmark')}>✓</div>
-                {aiTitle && (
-                  <p className={cls('aiTitle')}>
-                    {aiTitle}
-                  </p>
+                <p className={cls('gotHeadline')}>We got your message</p>
+                {submittedMessage && (
+                  <blockquote className={cls('quotedMessage')}>
+                    {quoteExpanded || submittedMessage.length <= QUOTE_CLAMP
+                      ? `“${submittedMessage}”`
+                      : `“${submittedMessage.slice(0, QUOTE_CLAMP).trimEnd()}…”`}
+                    {submittedMessage.length > QUOTE_CLAMP && !quoteExpanded && (
+                      <button
+                        type="button"
+                        className={cls('quoteShowMore')}
+                        onClick={() => setQuoteExpanded(true)}
+                      >
+                        Show more
+                      </button>
+                    )}
+                  </blockquote>
                 )}
-                {aiResponse && (
-                  <p className={cls('feedbackText')}>
-                    {aiResponse}
-                  </p>
-                )}
+                <p className={cls('promiseLine')}>
+                  We&rsquo;ll review this within 1 day.
+                  {githubIssueNumber && (
+                    <>
+                      <br />
+                      Tracked as{' '}
+                      {githubIssueUrl ? (
+                        <a
+                          href={githubIssueUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cls('promiseLink')}
+                        >
+                          issue #{githubIssueNumber} ↗
+                        </a>
+                      ) : (
+                        <span className={cls('promiseLink')}>issue #{githubIssueNumber}</span>
+                      )}
+                    </>
+                  )}
+                </p>
 
                 {/* Post-submit subscribe section. If an email was entered at
                     submit time, show a toggle so the submitter can flip
@@ -1018,37 +1097,17 @@ export function FeedbackWidget({
                   </form>
                 )}
 
-                {/* Read-only classification chips. They're just visual
-                    confirmation of how the AI bucketed the issue; correcting
-                    them happens through the refine textarea below (Federico's
-                    UX feedback: click-to-edit badges felt fiddly and didn't
-                    let him fix the summary itself). */}
-                {classification && (
-                  <div className={cls('badgeRow')} aria-label="AI classification">
-                    <span className={cls('badge', 'categoryBadge')}>
-                      {classification.category}
-                    </span>
-                    <span className={cls('badge', 'featureAreaBadge')}>
-                      {classification.feature_area}
-                    </span>
-                    <span
-                      className={cls(
-                        'badge',
-                        classification.priority === 'P0' && 'priorityHighBadge',
-                        classification.priority === 'P1' && 'priorityMediumBadge',
-                        classification.priority !== 'P0' && classification.priority !== 'P1' && 'priorityLowBadge',
-                      )}
-                    >
-                      {classification.priority}
-                    </span>
-                  </div>
+                {/* Refine ("Add a detail") — quiet escape hatch. The
+                    classification chips that used to sit here are gone
+                    per multi-agent UX review; the team still gets the AI
+                    classification server-side, the submitter doesn't see
+                    or need to validate it. */}
+                {feedbackId && refineSentOk && (
+                  <p className={cls('refineConfirm')} role="status">
+                    Thanks, added.
+                  </p>
                 )}
-
-                {/* Refine flow: lets the submitter clarify ("you misread it
-                    as a bug - it's actually a feature request") and have the
-                    AI re-summarise + re-classify both. Server PATCHes
-                    {follow_up} -> re-runs Gemini -> returns refined ai_data. */}
-                {feedbackId && !refineOpen && (
+                {feedbackId && !refineOpen && !refineSentOk && (
                   <button
                     type="button"
                     className={cls('refineToggle')}
@@ -1057,7 +1116,7 @@ export function FeedbackWidget({
                       setRefineError(null)
                     }}
                   >
-                    Not quite right? Add more details
+                    Add a detail
                   </button>
                 )}
 
@@ -1070,12 +1129,12 @@ export function FeedbackWidget({
                     }}
                   >
                     <label htmlFor={`${messageId}-refine`} className={cls('refineLabel')}>
-                      What did we miss? We'll update the summary.
+                      Anything else to add?
                     </label>
                     <textarea
                       id={`${messageId}-refine`}
                       className={cls('refineTextarea')}
-                      placeholder="e.g. 'It's not a bug, it's a feature request — I want a dark-mode toggle in settings.'"
+                      placeholder="e.g. 'Actually it's Linux not Mac. The spinner times out at ~30s.'"
                       value={refineDraft}
                       onChange={(e) => setRefineDraft(e.target.value)}
                       disabled={patching}
@@ -1106,7 +1165,7 @@ export function FeedbackWidget({
                         className={cls('actionButton', 'primaryButton', 'refineSubmit')}
                         disabled={patching || !refineDraft.trim()}
                       >
-                        {patching ? 'Updating...' : 'Update summary'}
+                        {patching ? 'Sending...' : 'Send detail'}
                       </button>
                     </div>
                   </form>
@@ -1116,7 +1175,7 @@ export function FeedbackWidget({
                   className={cls('actionButton', 'secondaryButton', 'closeActionButton')}
                   onClick={handleClose}
                 >
-                  Close
+                  Done
                 </button>
               </div>
             ) : (

@@ -331,6 +331,8 @@ export async function handleFeedback(request: Request, deps: FeedbackDeps): Prom
     return json({
       id: feedback.id,
       ai_data: aiData,
+      github_issue_number: githubIssue?.number ?? null,
+      github_issue_url: githubIssue?.url ?? null,
       message: 'Feedback received',
     })
   } catch (error) {
