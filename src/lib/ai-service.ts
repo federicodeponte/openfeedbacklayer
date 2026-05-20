@@ -12,6 +12,19 @@ export interface AnalyzeFeedbackParams {
   geminiApiKey: string
 }
 
+export interface RefineFeedbackParams {
+  messageRaw: string
+  /** What the submitter typed in the "this isn't quite right - here's
+   *  what I actually meant" follow-up box, after seeing the initial AI
+   *  summary. */
+  followUp: string
+  /** The classification + summary the AI produced on the first pass,
+   *  so the model can correct itself rather than re-classify from
+   *  scratch. */
+  prior: FeedbackAIData
+  geminiApiKey: string
+}
+
 /**
  * Analyze feedback with Gemini 2.5 Flash Lite
  * Returns structured AI data or null if AI fails (fail gracefully)
@@ -128,5 +141,99 @@ Return ONLY valid JSON (no markdown, no explanation):
   } catch (error) {
     console.error('[OpenFeedbackLayer] Error analyzing feedback:', error)
     return null // Fail gracefully
+  }
+}
+
+/**
+ * Re-classify feedback after the submitter has read the first pass
+ * and typed a follow-up clarification ("you got X wrong, this is
+ * actually about Y"). We feed the model the original message, the
+ * prior AI output, and the follow-up so it can correct itself instead
+ * of re-classifying from scratch and forgetting context.
+ *
+ * Returns null on any failure so the caller can keep the prior aiData
+ * and surface a "couldn't refine, please try again" message.
+ */
+export async function refineFeedback({
+  messageRaw,
+  followUp,
+  prior,
+  geminiApiKey,
+}: RefineFeedbackParams): Promise<FeedbackAIData | null> {
+  if (!geminiApiKey) {
+    console.warn('[OpenFeedbackLayer] No Gemini API key provided, skipping refinement')
+    return null
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(geminiApiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
+
+    const prompt = `You previously analyzed a piece of feedback. The submitter
+has now sent a follow-up clarification because something in your analysis was
+off (wrong category, wrong priority, you missed the actual issue, or the
+summary didn't capture it). Use the follow-up to CORRECT your earlier
+analysis. Keep what's still right; revise what's now wrong.
+
+short_summary is shown back TO the submitter, so write it in SECOND PERSON
+addressing them directly (never "the user" / third person).
+
+Original feedback (do not invent details not present in the original or
+the follow-up):
+"${messageRaw}"
+
+Your prior analysis:
+${JSON.stringify(prior, null, 2)}
+
+Submitter's follow-up clarification:
+"${followUp}"
+
+Return ONLY valid JSON (no markdown, no explanation) with the same shape
+as before. Revise every field as needed in light of the follow-up:
+{
+  "title": "...",
+  "short_summary": "...",
+  "key_details": ["...", "..."],
+  "suggested_category": "bug"|"feature"|"question"|"billing"|"praise"|"other",
+  "suggested_feature_area": "...",
+  "suggested_priority": "low"|"medium"|"high",
+  "steps": ["...", "..."],
+  "expected": "..." or null,
+  "confidence": 0.0-1.0,
+  "clarifying_questions": ["...", "..."]
+}`
+
+    const result = await model.generateContent([{ text: prompt }])
+    const text = result.response.text()
+
+    if (!text) {
+      console.warn('[OpenFeedbackLayer] Empty response from Gemini refine')
+      return null
+    }
+
+    let jsonText = text.trim()
+    const jsonMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/)
+    if (jsonMatch) {
+      jsonText = jsonMatch[1]
+    }
+
+    const aiData = JSON.parse(jsonText) as FeedbackAIData
+
+    if (
+      !aiData.title ||
+      !aiData.short_summary ||
+      !Array.isArray(aiData.key_details) ||
+      !['bug', 'feature', 'question', 'billing', 'praise', 'other'].includes(aiData.suggested_category) ||
+      !aiData.suggested_feature_area ||
+      !['low', 'medium', 'high'].includes(aiData.suggested_priority)
+    ) {
+      console.warn('[OpenFeedbackLayer] Invalid AI refine response structure', aiData)
+      return null
+    }
+
+    return aiData
+  } catch (error) {
+    console.error('[OpenFeedbackLayer] Error refining feedback:', error)
+    return null
   }
 }

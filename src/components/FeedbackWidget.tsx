@@ -8,6 +8,19 @@
 import React, { useState, useRef, useEffect, useId } from 'react'
 import type { FeedbackWidgetProps } from '../lib/types'
 
+/**
+ * Subset of FeedbackAIData the success-state UI consumes. Re-declared
+ * structurally (not imported) so the widget bundle stays decoupled from
+ * the server-side types file — keeps the client tree-shake clean.
+ */
+interface FeedbackAIDataLike {
+  title?: string
+  short_summary?: string
+  suggested_category?: string
+  suggested_feature_area?: string
+  suggested_priority?: string
+}
+
 const DEFAULT_COLORS = {
   primary: '#2563eb', // blue-600
   primaryHover: '#1d4ed8', // blue-700
@@ -197,45 +210,15 @@ const STYLES = {
     marginRight: 6,
     marginBottom: 6,
   },
-  badgeButton: {
-    // Make the colored badge clickable to enter edit mode without losing the
-    // colored pill treatment. Dashed border + cursor signals "actionable" so
-    // users don't miss that the AI classification is editable.
-    fontFamily: 'inherit',
-    cursor: 'pointer',
-    // Same vertical alignment as <span> badges so heights match in the row.
-    lineHeight: 1,
-    // Subtle dashed outline so the click affordance is unmistakable; without
-    // this the badge reads as a plain label and Federico's first reaction
-    // ("I can also not give feedback to the classification or edit it") was
-    // exactly that visual ambiguity.
-    border: '1px dashed currentColor',
-    // Tighten padding to compensate for the 1px border so heights still match
-    // un-bordered badges in the same row.
-    padding: '3px 7px',
-  },
-  editSelect: {
-    fontFamily: 'inherit',
-    fontSize: 12,
-    padding: '4px 6px',
-    borderRadius: 4,
-    border: `1px solid ${DEFAULT_COLORS.border}`,
-    marginRight: 6,
-    marginBottom: 6,
-    backgroundColor: DEFAULT_COLORS.bg,
+  aiTitle: {
+    // Headline of the success state — the AI's understood title of the
+    // issue, in the submitter's voice. Bold so it reads as "we got it",
+    // sized between the popup title and body copy.
+    fontSize: 16,
+    fontWeight: 600,
     color: DEFAULT_COLORS.text,
-  },
-  editInput: {
-    fontFamily: 'inherit',
-    fontSize: 12,
-    padding: '4px 6px',
-    borderRadius: 4,
-    border: `1px solid ${DEFAULT_COLORS.border}`,
-    marginRight: 6,
-    marginBottom: 6,
-    width: 110,
-    backgroundColor: DEFAULT_COLORS.bg,
-    color: DEFAULT_COLORS.text,
+    margin: '0 0 8px',
+    lineHeight: 1.35,
   },
   successMessage: {
     textAlign: 'center',
@@ -342,11 +325,67 @@ const STYLES = {
     backgroundColor: '#dcfce7',
     color: '#16a34a',
   },
-  correctionHint: {
-    fontSize: 11,
+  refineToggle: {
+    // Lightweight link-style button under the badges. Says "Not quite right?
+    // Add more details" — when clicked, expands the refine textarea.
+    background: 'transparent',
+    border: 'none',
+    color: DEFAULT_COLORS.primary,
+    fontFamily: 'inherit',
+    fontSize: 12,
+    padding: '4px 8px',
+    margin: '4px 0 8px',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  },
+  refineForm: {
+    marginTop: 4,
+    marginBottom: 12,
+    textAlign: 'left',
+  },
+  refineLabel: {
+    display: 'block',
+    fontSize: 12,
     color: DEFAULT_COLORS.textMuted,
-    marginTop: 8,
+    marginBottom: 6,
+  },
+  refineTextarea: {
+    width: '100%',
+    boxSizing: 'border-box',
+    minHeight: 60,
+    padding: '8px 10px',
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    borderRadius: 8,
+    backgroundColor: DEFAULT_COLORS.bg,
+    color: DEFAULT_COLORS.text,
+    fontFamily: 'inherit',
+    fontSize: 13,
+    lineHeight: 1.5,
+    resize: 'vertical',
+  },
+  refineError: {
+    fontSize: 12,
+    color: '#dc2626',
+    marginTop: 6,
     marginBottom: 0,
+  },
+  refineActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 8,
+  },
+  refineCancel: {
+    flex: 0,
+    minHeight: 0,
+    padding: '6px 12px',
+    fontSize: 13,
+  },
+  refineSubmit: {
+    flex: 0,
+    minHeight: 0,
+    padding: '6px 14px',
+    fontSize: 13,
   },
   closeActionButton: {
     marginTop: 16,
@@ -486,13 +525,22 @@ export function FeedbackWidget({
   } | null>(null)
   const [honeypot, setHoneypot] = useState('')
   // Post-submit edit state. feedbackId is returned by POST and used by PATCH
-  // so the submitter can flip subscribe + correct AI classification mistakes.
+  // for the follow-up refine flow + subscribe toggle.
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
-  const [editingField, setEditingField] = useState<'category' | 'feature_area' | 'priority' | null>(null)
+  // The AI's understood title is the headline of the success state - the
+  // submitter wants to know "did the AI actually understand my issue?", not
+  // just "was it categorised". Persisted so a refine round-trip can update it.
+  const [aiTitle, setAiTitle] = useState<string | null>(null)
   const [patching, setPatching] = useState(false)
   // Lets a submitter who skipped the email field still subscribe to updates
   // after seeing the success state (PR review feedback).
   const [postSubmitEmailDraft, setPostSubmitEmailDraft] = useState('')
+  // Refine flow: submitter reads the AI's summary, decides the AI missed or
+  // mis-classified something, opens the refine textarea, types a clarification,
+  // PATCH ships it to the server which re-runs Gemini.
+  const [refineOpen, setRefineOpen] = useState(false)
+  const [refineDraft, setRefineDraft] = useState('')
+  const [refineError, setRefineError] = useState<string | null>(null)
 
 
   const reactId = useId()
@@ -536,7 +584,10 @@ export function FeedbackWidget({
         setAiResponse(null)
         setClassification(null)
         setFeedbackId(null)
-        setEditingField(null)
+        setAiTitle(null)
+        setRefineOpen(false)
+        setRefineDraft('')
+        setRefineError(null)
       }, 300)
     } else if (hadError) {
       setTimeout(() => {
@@ -681,6 +732,7 @@ export function FeedbackWidget({
           feature_area: aiData.suggested_feature_area || 'general',
           priority: formatPriority(aiData.suggested_priority || 'medium'),
         })
+        setAiTitle(aiData.title || null)
         setAiResponse(aiData.short_summary || 'Thanks - your feedback is in.')
       } else {
         setClassification({
@@ -688,6 +740,7 @@ export function FeedbackWidget({
           feature_area: 'general',
           priority: 'P1',
         })
+        setAiTitle(null)
         setAiResponse('Thanks - your feedback is in.')
       }
 
@@ -758,23 +811,49 @@ export function FeedbackWidget({
     }
   }
 
-  const handleEditClassification = async (
-    field: 'suggested_category' | 'suggested_feature_area' | 'suggested_priority',
-    value: string,
-  ) => {
-    if (!classification) return
-    const map = {
-      suggested_category: 'category' as const,
-      suggested_feature_area: 'feature_area' as const,
-      suggested_priority: 'priority' as const,
+  // Refine flow: submitter saw the AI's summary, decided it missed or
+  // mis-classified something, typed a clarification, hit "Update". We send
+  // the follow-up to the server which re-runs Gemini on
+  // (original message + prior aiData + this follow-up) and returns the
+  // corrected ai_data. The UI then re-renders title + summary + chips.
+  const handleSubmitRefine = async () => {
+    const followUp = refineDraft.trim()
+    if (!followUp || !feedbackId || patching) return
+
+    setRefineError(null)
+    setPatching(true)
+    try {
+      const res = await fetch(`${apiEndpoint}/${feedbackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ follow_up: followUp }),
+      })
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        setRefineError(body?.error || "We couldn't refine that - please try again.")
+        return
+      }
+
+      const data = (await res.json()) as { ai_data?: FeedbackAIDataLike | null }
+      const refined = data.ai_data
+      if (refined) {
+        setAiTitle(refined.title || null)
+        setAiResponse(refined.short_summary || aiResponse)
+        setClassification({
+          category: refined.suggested_category || 'other',
+          feature_area: refined.suggested_feature_area || 'general',
+          priority: formatPriority(refined.suggested_priority || 'medium'),
+        })
+      }
+      setRefineDraft('')
+      setRefineOpen(false)
+    } catch (err) {
+      console.error('[OpenFeedbackLayer] Refine error:', err)
+      setRefineError("We couldn't refine that - please try again.")
+    } finally {
+      setPatching(false)
     }
-    const localField = map[field]
-    const localValue = field === 'suggested_priority' ? formatPriority(value) : value
-    const prev = { ...classification }
-    setClassification({ ...classification, [localField]: localValue })
-    setEditingField(null)
-    const ok = await sendPatch({ [field]: value })
-    if (!ok) setClassification(prev)
   }
 
   return (
@@ -855,12 +934,25 @@ export function FeedbackWidget({
                 </div>
               </div>
             ) : isSent ? (
-              // Success state - editable post-submit
+              // Success state. The headline is the AI's understood title of
+              // the issue (what's actually wrong, in 5-8 words) — that's the
+              // signal the submitter wants ("did the AI get it right?"). The
+              // short_summary lives under it as the friendly "we got it"
+              // acknowledgement. If the AI got something wrong, the submitter
+              // opens the refine box below and sends a follow-up clarification
+              // that re-runs Gemini server-side.
               <div className={cls('successMessage')} role="status" aria-live="polite">
                 <div className={cls('checkmark')}>✓</div>
-                <p className={cls('feedbackText')}>
-                  {aiResponse}
-                </p>
+                {aiTitle && (
+                  <p className={cls('aiTitle')}>
+                    {aiTitle}
+                  </p>
+                )}
+                {aiResponse && (
+                  <p className={cls('feedbackText')}>
+                    {aiResponse}
+                  </p>
+                )}
 
                 {/* Post-submit subscribe section. If an email was entered at
                     submit time, show a toggle so the submitter can flip
@@ -926,109 +1018,98 @@ export function FeedbackWidget({
                   </form>
                 )}
 
-                {/* Editable classification badges - click to correct the AI */}
-                {classification && feedbackId && (
-                  <div className={cls('badgeRow')}>
-                    {editingField === 'category' ? (
-                      <select
-                        autoFocus
-                        defaultValue={classification.category}
-                        disabled={patching}
-                        onBlur={() => setEditingField(null)}
-                        onChange={(e) => handleEditClassification('suggested_category', e.target.value)}
-                        className={cls('editSelect')}
-                        aria-label="Edit category"
-                      >
-                        {['bug', 'feature', 'question', 'billing', 'praise', 'other'].map((v) => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setEditingField('category')}
-                        className={cls('badge', 'badgeButton', 'categoryBadge')}
-                        aria-label={`Category: ${classification.category} (click to edit)`}
-                        title="Click to edit"
-                      >
-                        {classification.category}
-                      </button>
-                    )}
-
-                    {editingField === 'feature_area' ? (
-                      <input
-                        autoFocus
-                        type="text"
-                        defaultValue={classification.feature_area}
-                        disabled={patching}
-                        maxLength={64}
-                        onBlur={(e) => {
-                          const v = e.target.value.trim()
-                          if (v && v !== classification.feature_area) {
-                            handleEditClassification('suggested_feature_area', v)
-                          } else {
-                            setEditingField(null)
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
-                          if (e.key === 'Escape') setEditingField(null)
-                        }}
-                        className={cls('editInput')}
-                        aria-label="Edit feature area"
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setEditingField('feature_area')}
-                        className={cls('badge', 'badgeButton', 'featureAreaBadge')}
-                        aria-label={`Area: ${classification.feature_area} (click to edit)`}
-                        title="Click to edit"
-                      >
-                        {classification.feature_area}
-                      </button>
-                    )}
-
-                    {editingField === 'priority' ? (
-                      <select
-                        autoFocus
-                        defaultValue={
-                          classification.priority === 'P0' ? 'high' : classification.priority === 'P1' ? 'medium' : 'low'
-                        }
-                        disabled={patching}
-                        onBlur={() => setEditingField(null)}
-                        onChange={(e) => handleEditClassification('suggested_priority', e.target.value)}
-                        className={cls('editSelect')}
-                        aria-label="Edit priority"
-                      >
-                        <option value="high">P0 (high)</option>
-                        <option value="medium">P1 (medium)</option>
-                        <option value="low">P2 (low)</option>
-                      </select>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setEditingField('priority')}
-                        className={cls(
-                          'badge',
-                          'badgeButton',
-                          classification.priority === 'P0' && 'priorityHighBadge',
-                          classification.priority === 'P1' && 'priorityMediumBadge',
-                          classification.priority !== 'P0' && classification.priority !== 'P1' && 'priorityLowBadge',
-                        )}
-                        aria-label={`Priority: ${classification.priority} (click to edit)`}
-                        title="Click to edit"
-                      >
-                        {classification.priority}
-                      </button>
-                    )}
+                {/* Read-only classification chips. They're just visual
+                    confirmation of how the AI bucketed the issue; correcting
+                    them happens through the refine textarea below (Federico's
+                    UX feedback: click-to-edit badges felt fiddly and didn't
+                    let him fix the summary itself). */}
+                {classification && (
+                  <div className={cls('badgeRow')} aria-label="AI classification">
+                    <span className={cls('badge', 'categoryBadge')}>
+                      {classification.category}
+                    </span>
+                    <span className={cls('badge', 'featureAreaBadge')}>
+                      {classification.feature_area}
+                    </span>
+                    <span
+                      className={cls(
+                        'badge',
+                        classification.priority === 'P0' && 'priorityHighBadge',
+                        classification.priority === 'P1' && 'priorityMediumBadge',
+                        classification.priority !== 'P0' && classification.priority !== 'P1' && 'priorityLowBadge',
+                      )}
+                    >
+                      {classification.priority}
+                    </span>
                   </div>
                 )}
 
-                {feedbackId && (
-                  <p className={cls('correctionHint')}>
-                    Click any badge to correct it
-                  </p>
+                {/* Refine flow: lets the submitter clarify ("you misread it
+                    as a bug - it's actually a feature request") and have the
+                    AI re-summarise + re-classify both. Server PATCHes
+                    {follow_up} -> re-runs Gemini -> returns refined ai_data. */}
+                {feedbackId && !refineOpen && (
+                  <button
+                    type="button"
+                    className={cls('refineToggle')}
+                    onClick={() => {
+                      setRefineOpen(true)
+                      setRefineError(null)
+                    }}
+                  >
+                    Not quite right? Add more details
+                  </button>
+                )}
+
+                {feedbackId && refineOpen && (
+                  <form
+                    className={cls('refineForm')}
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      handleSubmitRefine()
+                    }}
+                  >
+                    <label htmlFor={`${messageId}-refine`} className={cls('refineLabel')}>
+                      What did we miss? We'll update the summary.
+                    </label>
+                    <textarea
+                      id={`${messageId}-refine`}
+                      className={cls('refineTextarea')}
+                      placeholder="e.g. 'It's not a bug, it's a feature request — I want a dark-mode toggle in settings.'"
+                      value={refineDraft}
+                      onChange={(e) => setRefineDraft(e.target.value)}
+                      disabled={patching}
+                      rows={3}
+                      maxLength={2000}
+                      autoFocus
+                    />
+                    {refineError && (
+                      <p className={cls('refineError')} role="alert">
+                        {refineError}
+                      </p>
+                    )}
+                    <div className={cls('refineActions')}>
+                      <button
+                        type="button"
+                        className={cls('actionButton', 'secondaryButton', 'refineCancel')}
+                        onClick={() => {
+                          setRefineOpen(false)
+                          setRefineDraft('')
+                          setRefineError(null)
+                        }}
+                        disabled={patching}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className={cls('actionButton', 'primaryButton', 'refineSubmit')}
+                        disabled={patching || !refineDraft.trim()}
+                      >
+                        {patching ? 'Updating...' : 'Update summary'}
+                      </button>
+                    </div>
+                  </form>
                 )}
 
                 <button

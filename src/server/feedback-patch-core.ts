@@ -1,10 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { refineFeedback } from '../lib/ai-service'
+import type { FeedbackAIData } from '../lib/types'
 import type { ServerEnv } from './feedback-core'
 
 /**
  * PATCH /api/feedback/[id] — let the original submitter (within their own
- * success-state session) change subscribe + correct the AI classification
- * if it got the category / feature area / priority wrong.
+ * success-state session) change subscribe, add an email after the fact,
+ * and send a follow-up clarification that re-runs the AI classification
+ * + summary.
  *
  * Trust model: anyone who knows the feedback row's UUID can mutate the
  * whitelisted fields. The UUID is only ever returned to the submitter
@@ -17,19 +20,21 @@ import type { ServerEnv } from './feedback-core'
  *   - subscribe: boolean
  *   - submitter_email: string (valid email; supports adding an email
  *     after the initial submit if the submitter skipped it)
- *   - suggested_category: bug | feature | question | billing | praise | other
- *   - suggested_feature_area: string (1-64 chars)
- *   - suggested_priority: low | medium | high
+ *   - follow_up: string (1-2000 chars) — submitter's "you got X wrong,
+ *     I actually meant Y" clarification. Server re-runs Gemini against
+ *     (original message + prior aiData + this follow-up) and overwrites
+ *     ai_data with the corrected pass. Returns the new ai_data.
  */
 
 export interface PatchFeedbackDeps {
   supabase: SupabaseClient
   env: ServerEnv
+  /** Injection point for the refine call so tests can stub Gemini. */
+  refine: typeof refineFeedback
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const CATEGORIES = ['bug', 'feature', 'question', 'billing', 'praise', 'other'] as const
-const PRIORITIES = ['low', 'medium', 'high'] as const
+const FOLLOW_UP_MAX_LEN = 2000
 
 let supabaseAdmin: ReturnType<typeof createClient> | null = null
 function getSupabaseAdmin(env: ServerEnv) {
@@ -40,7 +45,7 @@ function getSupabaseAdmin(env: ServerEnv) {
 }
 
 export function realPatchDeps(env: ServerEnv = process.env): PatchFeedbackDeps {
-  return { supabase: getSupabaseAdmin(env), env }
+  return { supabase: getSupabaseAdmin(env), env, refine: refineFeedback }
 }
 
 function json(body: unknown, init?: ResponseInit): Response {
@@ -63,7 +68,7 @@ export async function handlePatch(
 
   // Whitelist + validate
   const updates: Record<string, unknown> = {}
-  const aiPatch: Record<string, string> = {}
+  let followUp: string | null = null
 
   if (body.subscribe !== undefined) {
     if (typeof body.subscribe !== 'boolean') {
@@ -87,47 +92,60 @@ export async function handlePatch(
     }
   }
 
-  if (body.suggested_category !== undefined) {
-    if (typeof body.suggested_category !== 'string' || !CATEGORIES.includes(body.suggested_category as typeof CATEGORIES[number])) {
-      return json({ error: 'invalid suggested_category' }, { status: 400 })
+  if (body.follow_up !== undefined) {
+    if (typeof body.follow_up !== 'string') {
+      return json({ error: 'follow_up must be string' }, { status: 400 })
     }
-    aiPatch.suggested_category = body.suggested_category
+    const trimmed = body.follow_up.trim()
+    if (trimmed.length < 1 || trimmed.length > FOLLOW_UP_MAX_LEN) {
+      return json({ error: `follow_up must be 1-${FOLLOW_UP_MAX_LEN} chars` }, { status: 400 })
+    }
+    followUp = trimmed
   }
 
-  if (body.suggested_priority !== undefined) {
-    if (typeof body.suggested_priority !== 'string' || !PRIORITIES.includes(body.suggested_priority as typeof PRIORITIES[number])) {
-      return json({ error: 'invalid suggested_priority' }, { status: 400 })
-    }
-    aiPatch.suggested_priority = body.suggested_priority
-  }
-
-  if (body.suggested_feature_area !== undefined) {
-    if (
-      typeof body.suggested_feature_area !== 'string' ||
-      body.suggested_feature_area.length < 1 ||
-      body.suggested_feature_area.length > 64
-    ) {
-      return json({ error: 'invalid suggested_feature_area' }, { status: 400 })
-    }
-    aiPatch.suggested_feature_area = body.suggested_feature_area.trim()
-  }
-
-  if (Object.keys(updates).length === 0 && Object.keys(aiPatch).length === 0) {
+  if (Object.keys(updates).length === 0 && followUp === null) {
     return json({ error: 'No mutable fields supplied' }, { status: 400 })
   }
 
   try {
-    // For ai_data, fetch-merge-write so we preserve untouched fields.
-    if (Object.keys(aiPatch).length > 0) {
+    // Refine path: re-run Gemini against (original message + prior aiData +
+    // follow-up) and overwrite ai_data with the corrected pass. We always
+    // need to load the row first so we have message_raw + prior aiData.
+    if (followUp !== null) {
       const { data: existing, error: readErr } = await deps.supabase
         .from('feedback')
-        .select('ai_data')
+        .select('message_raw, ai_data')
         .eq('id', id)
         .maybeSingle()
       if (readErr) throw readErr
       if (!existing) return json({ error: 'Not found' }, { status: 404 })
-      const merged = { ...((existing.ai_data as Record<string, unknown>) || {}), ...aiPatch }
-      updates.ai_data = merged
+
+      const geminiApiKey = deps.env.GEMINI_API_KEY
+      if (!geminiApiKey) {
+        return json({ error: 'AI refinement is not configured on this deployment' }, { status: 503 })
+      }
+
+      const prior = (existing.ai_data as FeedbackAIData | null) || null
+      if (!prior) {
+        return json({ error: 'No prior AI analysis to refine' }, { status: 409 })
+      }
+
+      const messageRaw = (existing.message_raw as string | null) || ''
+      const refined = await deps.refine({
+        messageRaw,
+        followUp,
+        prior,
+        geminiApiKey,
+      })
+
+      if (!refined) {
+        return json(
+          { error: 'AI refinement failed - please try again or rephrase' },
+          { status: 502 },
+        )
+      }
+
+      updates.ai_data = refined
     }
 
     const { data, error } = await deps.supabase
