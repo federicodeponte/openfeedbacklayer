@@ -198,13 +198,21 @@ const STYLES = {
     marginBottom: 6,
   },
   badgeButton: {
-    // Make the colored badge clickable to enter edit mode without changing
-    // the visual treatment; cursor signals it's actionable.
+    // Make the colored badge clickable to enter edit mode without losing the
+    // colored pill treatment. Dashed border + cursor signals "actionable" so
+    // users don't miss that the AI classification is editable.
     fontFamily: 'inherit',
-    border: 'none',
     cursor: 'pointer',
     // Same vertical alignment as <span> badges so heights match in the row.
     lineHeight: 1,
+    // Subtle dashed outline so the click affordance is unmistakable; without
+    // this the badge reads as a plain label and Federico's first reaction
+    // ("I can also not give feedback to the classification or edit it") was
+    // exactly that visual ambiguity.
+    border: '1px dashed currentColor',
+    // Tighten padding to compensate for the 1px border so heights still match
+    // un-bordered badges in the same row.
+    padding: '3px 7px',
   },
   editSelect: {
     fontFamily: 'inherit',
