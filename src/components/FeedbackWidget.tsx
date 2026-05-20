@@ -46,6 +46,12 @@ export function FeedbackWidget({
     priority: string
   } | null>(null)
   const [honeypot, setHoneypot] = useState('')
+  // Post-submit edit state. feedbackId is returned by POST and used by PATCH
+  // so the submitter can flip subscribe + correct AI classification mistakes.
+  const [feedbackId, setFeedbackId] = useState<string | null>(null)
+  const [editingField, setEditingField] = useState<'category' | 'feature_area' | 'priority' | null>(null)
+  const [patching, setPatching] = useState(false)
+  const [featureAreaDraft, setFeatureAreaDraft] = useState('')
 
   const reactId = useId()
   const instanceId = reactId.replace(/:/g, '')
@@ -98,6 +104,9 @@ export function FeedbackWidget({
         setError(null)
         setAiResponse(null)
         setClassification(null)
+        setFeedbackId(null)
+        setEditingField(null)
+        setFeatureAreaDraft('')
       }, 300)
     } else if (hadError) {
       setTimeout(() => {
@@ -234,6 +243,7 @@ export function FeedbackWidget({
 
       const result = await response.json()
       const aiData = result.ai_data
+      setFeedbackId(result.id || null)
 
       if (aiData) {
         setClassification({
@@ -241,14 +251,14 @@ export function FeedbackWidget({
           feature_area: aiData.suggested_feature_area || 'general',
           priority: formatPriority(aiData.suggested_priority || 'medium'),
         })
-        setAiResponse(aiData.short_summary || 'Thank you for your feedback!')
+        setAiResponse(aiData.short_summary || 'Thanks - your feedback is in.')
       } else {
         setClassification({
           category: 'feedback',
           feature_area: 'general',
           priority: 'P1',
         })
-        setAiResponse('Thank you for your feedback!')
+        setAiResponse('Thanks - your feedback is in.')
       }
 
       setIsSent(true)
@@ -276,12 +286,61 @@ export function FeedbackWidget({
     }
   }
 
+  // PATCH the feedback row after submit. Used by the success-state edit UI
+  // (subscribe toggle + correct AI classification badges). The server side
+  // whitelists fields and validates each one (see feedback-patch-core.ts).
+  const sendPatch = async (patch: Record<string, unknown>): Promise<boolean> => {
+    if (!feedbackId) return false
+    setPatching(true)
+    try {
+      const res = await fetch(`${apiEndpoint}/${feedbackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      if (!res.ok) return false
+      return true
+    } catch {
+      return false
+    } finally {
+      setPatching(false)
+    }
+  }
+
+  const handleToggleSubscribeAfterSend = async (next: boolean) => {
+    const prev = subscribe
+    setSubscribe(next) // optimistic
+    const ok = await sendPatch({ subscribe: next })
+    if (!ok) setSubscribe(prev)
+  }
+
+  const handleEditClassification = async (
+    field: 'suggested_category' | 'suggested_feature_area' | 'suggested_priority',
+    value: string,
+  ) => {
+    if (!classification) return
+    const map = {
+      suggested_category: 'category' as const,
+      suggested_feature_area: 'feature_area' as const,
+      suggested_priority: 'priority' as const,
+    }
+    const localField = map[field]
+    const localValue = field === 'suggested_priority' ? formatPriority(value) : value
+    const prev = { ...classification }
+    setClassification({ ...classification, [localField]: localValue })
+    setEditingField(null)
+    const ok = await sendPatch({ [field]: value })
+    if (!ok) setClassification(prev)
+  }
+
   // Styles
   const styles = {
     container: {
       position: 'fixed' as const,
       zIndex: 99999,
-      fontFamily: 'system-ui, -apple-system, sans-serif',
+      // Inter first (Floom design system), system-ui as graceful fallback for
+      // consumers that don't load Inter. Children inherit via fontFamily: inherit.
+      fontFamily: '"Inter", "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       width: 48,
       height: 48,
       ...positionStyles[position],
@@ -455,6 +514,38 @@ export function FeedbackWidget({
       marginRight: 6,
       marginBottom: 6,
     },
+    badgeButton: {
+      // Make the colored badge clickable to enter edit mode without changing
+      // the visual treatment; cursor signals it's actionable.
+      fontFamily: 'inherit',
+      border: 'none',
+      cursor: 'pointer',
+      // Same vertical alignment as <span> badges so heights match in the row.
+      lineHeight: 1,
+    },
+    editSelect: {
+      fontFamily: 'inherit',
+      fontSize: 12,
+      padding: '4px 6px',
+      borderRadius: 4,
+      border: `1px solid ${DEFAULT_COLORS.border}`,
+      marginRight: 6,
+      marginBottom: 6,
+      backgroundColor: DEFAULT_COLORS.bg,
+      color: DEFAULT_COLORS.text,
+    },
+    editInput: {
+      fontFamily: 'inherit',
+      fontSize: 12,
+      padding: '4px 6px',
+      borderRadius: 4,
+      border: `1px solid ${DEFAULT_COLORS.border}`,
+      marginRight: 6,
+      marginBottom: 6,
+      width: 110,
+      backgroundColor: DEFAULT_COLORS.bg,
+      color: DEFAULT_COLORS.text,
+    },
     successMessage: {
       textAlign: 'center' as const,
       padding: 20,
@@ -503,8 +594,21 @@ export function FeedbackWidget({
         aria-controls={popupId}
         tabIndex={isOpen ? -1 : 0}
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+        {/* lucide MessageSquareText — uniform stroke-1.75 per Floom UI bar */}
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="white"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          <path d="M7 9h10" />
+          <path d="M7 13h6" />
         </svg>
       </button>
 
@@ -554,59 +658,154 @@ export function FeedbackWidget({
                 </div>
               </div>
             ) : isSent ? (
-              // Success state
+              // Success state - editable post-submit
               <div style={styles.successMessage} role="status" aria-live="polite">
                 <div style={styles.checkmark}>✓</div>
                 <p style={{ fontSize: 14, color: DEFAULT_COLORS.text, marginBottom: 12 }}>
                   {aiResponse}
                 </p>
-                {email.trim() && subscribe && (
-                  <p style={{ fontSize: 12, color: DEFAULT_COLORS.textMuted, marginTop: -4, marginBottom: 12 }}>
-                    We'll email you at{' '}
-                    <span style={{ wordBreak: 'break-all' }}>{email.trim()}</span> with updates.
-                  </p>
+
+                {/* Post-submit subscribe toggle - change your mind anytime */}
+                {email.trim() && feedbackId && (
+                  <label
+                    htmlFor={`${subscribeId}-after`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      justifyContent: 'center',
+                      fontSize: 12,
+                      color: DEFAULT_COLORS.textMuted,
+                      marginBottom: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      id={`${subscribeId}-after`}
+                      type="checkbox"
+                      checked={subscribe}
+                      disabled={patching}
+                      onChange={(e) => handleToggleSubscribeAfterSend(e.target.checked)}
+                      style={{ width: 14, height: 14, margin: 0, cursor: 'pointer' }}
+                    />
+                    {subscribe ? (
+                      <span>
+                        We'll email <span style={{ wordBreak: 'break-all' }}>{email.trim()}</span> with updates
+                      </span>
+                    ) : (
+                      <span>Email me when this is addressed</span>
+                    )}
+                  </label>
                 )}
-                {classification && (
-                  <div>
-                    <span
-                      style={{
-                        ...styles.badge,
-                        backgroundColor: '#dbeafe',
-                        color: '#1e40af',
-                      }}
-                    >
-                      {classification.category}
-                    </span>
-                    <span
-                      style={{
-                        ...styles.badge,
-                        backgroundColor: '#f3e8ff',
-                        color: '#7c3aed',
-                      }}
-                    >
-                      {classification.feature_area}
-                    </span>
-                    <span
-                      style={{
-                        ...styles.badge,
-                        backgroundColor:
-                          classification.priority === 'P0'
-                            ? '#fee2e2'
-                            : classification.priority === 'P1'
-                            ? '#fef3c7'
-                            : '#dcfce7',
-                        color:
-                          classification.priority === 'P0'
-                            ? '#dc2626'
-                            : classification.priority === 'P1'
-                            ? '#d97706'
-                            : '#16a34a',
-                      }}
-                    >
-                      {classification.priority}
-                    </span>
+
+                {/* Editable classification badges - click to correct the AI */}
+                {classification && feedbackId && (
+                  <div style={{ marginBottom: 4 }}>
+                    {editingField === 'category' ? (
+                      <select
+                        autoFocus
+                        defaultValue={classification.category}
+                        disabled={patching}
+                        onBlur={() => setEditingField(null)}
+                        onChange={(e) => handleEditClassification('suggested_category', e.target.value)}
+                        style={{ ...styles.editSelect }}
+                        aria-label="Edit category"
+                      >
+                        {['bug', 'feature', 'question', 'billing', 'praise', 'other'].map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingField('category')}
+                        style={{ ...styles.badge, ...styles.badgeButton, backgroundColor: '#dbeafe', color: '#1e40af' }}
+                        aria-label={`Category: ${classification.category} (click to edit)`}
+                        title="Click to edit"
+                      >
+                        {classification.category}
+                      </button>
+                    )}
+
+                    {editingField === 'feature_area' ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        defaultValue={classification.feature_area}
+                        disabled={patching}
+                        maxLength={64}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim()
+                          if (v && v !== classification.feature_area) {
+                            handleEditClassification('suggested_feature_area', v)
+                          } else {
+                            setEditingField(null)
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
+                          if (e.key === 'Escape') setEditingField(null)
+                        }}
+                        style={{ ...styles.editInput }}
+                        aria-label="Edit feature area"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingField('feature_area')}
+                        style={{ ...styles.badge, ...styles.badgeButton, backgroundColor: '#f3e8ff', color: '#7c3aed' }}
+                        aria-label={`Area: ${classification.feature_area} (click to edit)`}
+                        title="Click to edit"
+                      >
+                        {classification.feature_area}
+                      </button>
+                    )}
+
+                    {editingField === 'priority' ? (
+                      <select
+                        autoFocus
+                        defaultValue={
+                          classification.priority === 'P0' ? 'high' : classification.priority === 'P1' ? 'medium' : 'low'
+                        }
+                        disabled={patching}
+                        onBlur={() => setEditingField(null)}
+                        onChange={(e) => handleEditClassification('suggested_priority', e.target.value)}
+                        style={{ ...styles.editSelect }}
+                        aria-label="Edit priority"
+                      >
+                        <option value="high">P0 (high)</option>
+                        <option value="medium">P1 (medium)</option>
+                        <option value="low">P2 (low)</option>
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingField('priority')}
+                        style={{
+                          ...styles.badge,
+                          ...styles.badgeButton,
+                          backgroundColor:
+                            classification.priority === 'P0' ? '#fee2e2' :
+                            classification.priority === 'P1' ? '#fef3c7' : '#dcfce7',
+                          color:
+                            classification.priority === 'P0' ? '#dc2626' :
+                            classification.priority === 'P1' ? '#d97706' : '#16a34a',
+                        }}
+                        aria-label={`Priority: ${classification.priority} (click to edit)`}
+                        title="Click to edit"
+                      >
+                        {classification.priority}
+                      </button>
+                    )}
                   </div>
                 )}
+
+                {feedbackId && (
+                  <p style={{ fontSize: 11, color: DEFAULT_COLORS.textMuted, marginTop: 8, marginBottom: 0 }}>
+                    Click any badge to correct it
+                  </p>
+                )}
+
                 <button
                   style={{ ...styles.actionButton, ...styles.secondaryButton, marginTop: 16 }}
                   onClick={handleClose}
@@ -723,10 +922,17 @@ export function FeedbackWidget({
 
                 <div style={styles.actions}>
                   <button
-                    style={{ ...styles.actionButton, ...styles.secondaryButton }}
+                    style={{ ...styles.actionButton, ...styles.secondaryButton, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach screenshot"
                   >
-                    📷 Screenshot
+                    {/* lucide Image */}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                      <circle cx="9" cy="9" r="2" />
+                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                    </svg>
+                    Screenshot
                   </button>
                   <button
                     style={{

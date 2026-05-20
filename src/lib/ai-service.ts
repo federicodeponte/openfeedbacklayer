@@ -30,21 +30,28 @@ export async function analyzeFeedback({
     const genAI = new GoogleGenerativeAI(geminiApiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
 
-    const prompt = `Analyze this user feedback and classify it. The user is reporting feedback, a bug, feature request, or question.
+    const prompt = `Analyze this feedback the submitter just sent in. The
+short_summary you produce is shown back TO the submitter in the success
+state, so write it in SECOND PERSON, addressing them directly. Never refer
+to them as "the user" or in third person. Examples:
+  GOOD: "You're reporting that the export button does nothing on the dashboard."
+  GOOD: "Thanks — you'd like a dark-mode toggle in settings."
+  BAD: "The user is reporting an Auto-update failed error."
+  BAD: "The user wants a dark mode."
 
-User message: "${messageRaw}"
+Their message: "${messageRaw}"
 
 Extract:
-1. A concise title (5-8 words)
-2. A short summary (1-2 sentences)
-3. Key details as a list
-4. Category: bug, feature, question, billing, praise, or other
-5. Feature area: which part of the product (e.g. "export", "upload", "dashboard", "prompts", "billing", "login")
-6. Priority: low, medium, or high (high = blocking/urgent, medium = important, low = nice to have)
-7. Steps to reproduce (if bug)
-8. Expected behavior (if bug)
-9. Confidence score (0.0-1.0)
-10. Clarifying questions (only if really needed, max 2)
+1. A concise title (5-8 words) — neutral phrasing, not second-person, used for the issue title.
+2. short_summary (1-2 sentences) — SECOND PERSON addressing the submitter, as above.
+3. Key details as a list (neutral phrasing).
+4. Category: bug, feature, question, billing, praise, or other.
+5. Feature area: which part of the product (e.g. "export", "upload", "dashboard", "prompts", "billing", "login").
+6. Priority: low, medium, or high (high = blocking/urgent, medium = important, low = nice to have).
+7. Steps to reproduce (if bug).
+8. Expected behavior (if bug).
+9. Confidence score (0.0-1.0).
+10. Clarifying questions (only if really needed, max 2) — addressed to the submitter in second person.
 
 Return ONLY valid JSON (no markdown, no explanation):
 {

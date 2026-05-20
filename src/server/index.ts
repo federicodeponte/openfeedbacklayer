@@ -1,5 +1,8 @@
 import { handleFeedback, realDeps as realFeedbackDeps } from './feedback-core'
 import { handleWebhook, realDeps as realWebhookDeps } from './webhook-core'
+import { handlePatch, realPatchDeps } from './feedback-patch-core'
+
+export { handlePatch, realPatchDeps, type PatchFeedbackDeps } from './feedback-patch-core'
 
 export {
   handleFeedback,
@@ -24,6 +27,16 @@ export const feedbackPOST = (request: Request): Promise<Response> =>
   handleFeedback(request, realFeedbackDeps(process.env))
 export const webhookPOST = (request: Request): Promise<Response> =>
   handleWebhook(request, realWebhookDeps(process.env))
+// PATCH /api/feedback/[id] — let the original submitter (within their
+// success-state session) flip subscribe and correct the AI classification
+// if it got category / feature_area / priority wrong. Mount at the dynamic
+// id route, e.g.:
+//   // app/api/feedback/[id]/route.ts
+//   import { feedbackPATCH } from 'openfeedbacklayer/server'
+//   export const PATCH = (req: Request, ctx: { params: Promise<{ id: string }> }) =>
+//     ctx.params.then(({ id }) => feedbackPATCH(req, id))
+export const feedbackPATCH = (request: Request, id: string): Promise<Response> =>
+  handlePatch(request, id, realPatchDeps(process.env))
 export {
   buildFeedbackIssuePayload,
   createFeedbackIssue,

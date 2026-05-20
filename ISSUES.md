@@ -295,3 +295,26 @@ the independent-review discipline.
 
 This is the genuine "done" signal as committed: an independent adversarial
 round finds zero new actionable findings.
+
+## P1 #16 — Federico review (PR #1) 2026-05-20 — design + post-submit edit
+Raised on PR review of feat/feedback-journey. Five items, all real:
+1. Widget design "very foreign from floom design system" and "design is bad".
+   Fix: Inter (per Floom UI bar memory), restrained green accent, refined
+   spacing + typography. NO emojis in UI (remove 📷 from screenshot button).
+2. FAB icon "is ugly". Fix: replace generic speech-bubble with proper
+   lucide-style SVG (stroke-width 1.5 per Floom memory). Surface 3 variants
+   before silent-picking (per "surface variants on uncertainty" memory).
+3. AI summary uses third-person ("The user is reporting...") — submitter IS
+   the user. Fix: update Gemini prompt to second-person ("You're reporting...")
+   so the success state reads as feedback TO the submitter, not ABOUT them.
+4. After submitting, can't change subscribe opinion. Fix: add subscribe
+   toggle in success state + PATCH /api/feedback/[id] endpoint.
+5. Can't edit AI classification if wrong. Fix: editable badges in success
+   state (category/feature_area/priority) wired to the same PATCH endpoint.
+
+Security note for PATCH: anyone with the feedback id can update. Acceptable
+for v0 because the id is an opaque UUID only the submitter's session sees;
+documented limitation. Future hardening = short-lived signed edit token
+returned with success response.
+
+Status: FIXING
