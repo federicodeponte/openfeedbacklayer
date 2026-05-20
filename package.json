@@ -32,7 +32,8 @@
     "dev": "tsup --watch",
     "lint": "eslint src/",
     "type-check": "tsc --noEmit",
-    "test": "npm run build && node --test test/*.test.mjs"
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepare": "[ -d dist ] || npm run build"
   },
   "peerDependencies": {
     "@supabase/supabase-js": ">=2.0.0",
