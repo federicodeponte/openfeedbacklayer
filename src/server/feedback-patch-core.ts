@@ -15,6 +15,8 @@ import type { ServerEnv } from './feedback-core'
  *
  * Whitelist of mutable fields (everything else is rejected):
  *   - subscribe: boolean
+ *   - submitter_email: string (valid email; supports adding an email
+ *     after the initial submit if the submitter skipped it)
  *   - suggested_category: bug | feature | question | billing | praise | other
  *   - suggested_feature_area: string (1-64 chars)
  *   - suggested_priority: low | medium | high
@@ -68,6 +70,21 @@ export async function handlePatch(
       return json({ error: 'subscribe must be boolean' }, { status: 400 })
     }
     updates.subscribe = body.subscribe
+  }
+
+  if (body.submitter_email !== undefined) {
+    if (typeof body.submitter_email !== 'string') {
+      return json({ error: 'submitter_email must be string' }, { status: 400 })
+    }
+    const email = body.submitter_email.trim()
+    if (email === '') {
+      // Allow clearing the email (and implicitly cancels future subscriber emails)
+      updates.submitter_email = null
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      return json({ error: 'invalid submitter_email' }, { status: 400 })
+    } else {
+      updates.submitter_email = email
+    }
   }
 
   if (body.suggested_category !== undefined) {

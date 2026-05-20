@@ -280,6 +280,37 @@ const STYLES = {
   subscribeAfterEmail: {
     wordBreak: 'break-all',
   },
+  addEmailForm: {
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  addEmailLabel: {
+    display: 'block',
+    fontSize: 12,
+    color: DEFAULT_COLORS.textMuted,
+    marginBottom: 6,
+  },
+  addEmailRow: {
+    display: 'flex',
+    gap: 6,
+    alignItems: 'stretch',
+  },
+  addEmailInput: {
+    fontFamily: 'inherit',
+    fontSize: 13,
+    padding: '8px 10px',
+    flex: 1,
+    minWidth: 0,
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    borderRadius: 8,
+    backgroundColor: DEFAULT_COLORS.bg,
+    color: DEFAULT_COLORS.text,
+  },
+  addEmailSubmit: {
+    flex: 0,
+    minHeight: 0,
+    padding: '8px 14px',
+  },
   badgeRow: {
     marginBottom: 4,
   },
@@ -451,6 +482,10 @@ export function FeedbackWidget({
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<'category' | 'feature_area' | 'priority' | null>(null)
   const [patching, setPatching] = useState(false)
+  // Lets a submitter who skipped the email field still subscribe to updates
+  // after seeing the success state (PR review feedback).
+  const [postSubmitEmailDraft, setPostSubmitEmailDraft] = useState('')
+
 
   const reactId = useId()
   const instanceId = reactId.replace(/:/g, '')
@@ -701,6 +736,20 @@ export function FeedbackWidget({
     if (!ok) setSubscribe(prev)
   }
 
+  const handleAddEmailAfterSubmit = async (newEmail: string) => {
+    const prevEmail = email
+    const prevSubscribe = subscribe
+    setEmail(newEmail)       // optimistic local
+    setSubscribe(true)
+    const ok = await sendPatch({ submitter_email: newEmail, subscribe: true })
+    if (!ok) {
+      setEmail(prevEmail)
+      setSubscribe(prevSubscribe)
+    } else {
+      setPostSubmitEmailDraft('')
+    }
+  }
+
   const handleEditClassification = async (
     field: 'suggested_category' | 'suggested_feature_area' | 'suggested_priority',
     value: string,
@@ -805,8 +854,12 @@ export function FeedbackWidget({
                   {aiResponse}
                 </p>
 
-                {/* Post-submit subscribe toggle - change your mind anytime */}
-                {email.trim() && feedbackId && (
+                {/* Post-submit subscribe section. If an email was entered at
+                    submit time, show a toggle so the submitter can flip
+                    subscribe. If no email was entered, show an "Add email to
+                    get updates" input so they can still subscribe after the
+                    fact (Federico's review feedback). */}
+                {feedbackId && email.trim() && (
                   <label
                     htmlFor={`${subscribeId}-after`}
                     className={cls('subscribeAfterLabel')}
@@ -827,6 +880,42 @@ export function FeedbackWidget({
                       <span>Email me when this is addressed</span>
                     )}
                   </label>
+                )}
+
+                {feedbackId && !email.trim() && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const value = postSubmitEmailDraft.trim()
+                      if (!value) return
+                      handleAddEmailAfterSubmit(value)
+                    }}
+                    className={cls('addEmailForm')}
+                    aria-label="Add your email to get updates"
+                  >
+                    <label htmlFor={`${emailId}-after`} className={cls('addEmailLabel')}>
+                      Want updates as this is addressed?
+                    </label>
+                    <div className={cls('addEmailRow')}>
+                      <input
+                        id={`${emailId}-after`}
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={postSubmitEmailDraft}
+                        onChange={(e) => setPostSubmitEmailDraft(e.target.value)}
+                        disabled={patching}
+                        className={cls('addEmailInput')}
+                      />
+                      <button
+                        type="submit"
+                        disabled={patching || !postSubmitEmailDraft.trim()}
+                        className={cls('actionButton', 'primaryButton', 'addEmailSubmit')}
+                      >
+                        {patching ? 'Saving...' : 'Subscribe'}
+                      </button>
+                    </div>
+                  </form>
                 )}
 
                 {/* Editable classification badges - click to correct the AI */}
