@@ -32,7 +32,7 @@ const PRIORITIES = ['low', 'medium', 'high'] as const
 let supabaseAdmin: ReturnType<typeof createClient> | null = null
 function getSupabaseAdmin(env: ServerEnv) {
   if (!supabaseAdmin) {
-    supabaseAdmin = createClient(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!)
+    supabaseAdmin = createClient((env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL)!, env.SUPABASE_SERVICE_ROLE_KEY!)
   }
   return supabaseAdmin
 }

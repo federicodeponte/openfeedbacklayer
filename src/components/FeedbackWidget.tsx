@@ -18,11 +18,411 @@ const DEFAULT_COLORS = {
   border: '#e5e7eb', // gray-200
 }
 
+const STYLES = {
+  container: {
+    position: 'fixed',
+    zIndex: 99999,
+    // Inter first (Floom design system), system-ui as graceful fallback for
+    // consumers that don't load Inter. Children inherit via fontFamily: inherit.
+    fontFamily: '"Inter", "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    width: 48,
+    height: 48,
+  },
+  button: {
+    width: 48,
+    height: 48,
+    borderRadius: '50%',
+    backgroundColor: 'var(--ofl-primary)',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+  },
+  popup: {
+    position: 'absolute',
+    width: 320,
+    // iPhone SE (320px viewport) was previously flush to the edge / overflowing.
+    maxWidth: 'calc(100vw - 24px)',
+    maxHeight: '75vh',
+    backgroundColor: DEFAULT_COLORS.bg,
+    borderRadius: 12,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  header: {
+    padding: '12px 16px',
+    borderBottom: `1px solid ${DEFAULT_COLORS.border}`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: DEFAULT_COLORS.text,
+    margin: 0,
+  },
+  closeButton: {
+    fontFamily: 'inherit',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    width: 44,
+    height: 44,
+    padding: 10,
+    color: DEFAULT_COLORS.textMuted,
+    fontSize: 18,
+    lineHeight: 1,
+  },
+  srOnly: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: 'hidden',
+    clip: 'rect(0, 0, 0, 0)',
+    whiteSpace: 'nowrap',
+    border: 0,
+  },
+  body: {
+    padding: 16,
+    overflowY: 'auto',
+    flex: 1,
+  },
+  textarea: {
+    width: '100%',
+    minHeight: 100,
+    padding: 12,
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    borderRadius: 8,
+    fontSize: 14,
+    resize: 'vertical',
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  },
+  emailInput: {
+    width: '100%',
+    height: 40,
+    padding: '8px 12px',
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    borderRadius: 8,
+    fontSize: 14,
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+    marginTop: 8,
+  },
+  subscribeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    color: DEFAULT_COLORS.textMuted,
+    fontSize: 12,
+  },
+  subscribeLabel: {
+    color: DEFAULT_COLORS.textMuted,
+    fontSize: 12,
+    cursor: 'pointer',
+  },
+  checkbox: {
+    fontFamily: 'inherit',
+    width: 14,
+    height: 14,
+    margin: 0,
+  },
+  screenshotPreview: {
+    marginTop: 8,
+    position: 'relative',
+  },
+  previewImage: {
+    width: '100%',
+    maxHeight: 120,
+    objectFit: 'cover',
+    borderRadius: 8,
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+  },
+  removeButton: {
+    fontFamily: 'inherit',
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 14,
+  },
+  actions: {
+    display: 'flex',
+    gap: 8,
+    marginTop: 12,
+  },
+  actionButton: {
+    fontFamily: 'inherit',
+    flex: 1,
+    padding: '10px 16px',
+    minHeight: 44,
+    borderRadius: 8,
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+  },
+  primaryButton: {
+    backgroundColor: 'var(--ofl-primary)',
+    color: 'white',
+  },
+  secondaryButton: {
+    backgroundColor: DEFAULT_COLORS.border,
+    color: DEFAULT_COLORS.text,
+  },
+  badge: {
+    display: 'inline-block',
+    padding: '4px 8px',
+    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: 500,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  badgeButton: {
+    // Make the colored badge clickable to enter edit mode without changing
+    // the visual treatment; cursor signals it's actionable.
+    fontFamily: 'inherit',
+    border: 'none',
+    cursor: 'pointer',
+    // Same vertical alignment as <span> badges so heights match in the row.
+    lineHeight: 1,
+  },
+  editSelect: {
+    fontFamily: 'inherit',
+    fontSize: 12,
+    padding: '4px 6px',
+    borderRadius: 4,
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    marginRight: 6,
+    marginBottom: 6,
+    backgroundColor: DEFAULT_COLORS.bg,
+    color: DEFAULT_COLORS.text,
+  },
+  editInput: {
+    fontFamily: 'inherit',
+    fontSize: 12,
+    padding: '4px 6px',
+    borderRadius: 4,
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    marginRight: 6,
+    marginBottom: 6,
+    width: 110,
+    backgroundColor: DEFAULT_COLORS.bg,
+    color: DEFAULT_COLORS.text,
+  },
+  successMessage: {
+    textAlign: 'center',
+    padding: 20,
+  },
+  checkmark: {
+    width: 48,
+    height: 48,
+    borderRadius: '50%',
+    backgroundColor: DEFAULT_COLORS.success,
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 24,
+    margin: '0 auto 16px',
+  },
+  errorMark: {
+    width: 48,
+    height: 48,
+    borderRadius: '50%',
+    backgroundColor: '#dc2626',
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 24,
+    margin: '0 auto 16px',
+  },
+  hint: {
+    fontSize: 12,
+    color: DEFAULT_COLORS.textMuted,
+    marginTop: 8,
+  },
+  feedbackText: {
+    fontSize: 14,
+    color: DEFAULT_COLORS.text,
+    marginBottom: 12,
+  },
+  subscribeAfterLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    justifyContent: 'center',
+    fontSize: 12,
+    color: DEFAULT_COLORS.textMuted,
+    marginBottom: 12,
+    cursor: 'pointer',
+  },
+  subscribeAfterEmail: {
+    wordBreak: 'break-all',
+  },
+  badgeRow: {
+    marginBottom: 4,
+  },
+  categoryBadge: {
+    backgroundColor: '#dbeafe',
+    color: '#1e40af',
+  },
+  featureAreaBadge: {
+    backgroundColor: '#f3e8ff',
+    color: '#7c3aed',
+  },
+  priorityHighBadge: {
+    backgroundColor: '#fee2e2',
+    color: '#dc2626',
+  },
+  priorityMediumBadge: {
+    backgroundColor: '#fef3c7',
+    color: '#d97706',
+  },
+  priorityLowBadge: {
+    backgroundColor: '#dcfce7',
+    color: '#16a34a',
+  },
+  correctionHint: {
+    fontSize: 11,
+    color: DEFAULT_COLORS.textMuted,
+    marginTop: 8,
+    marginBottom: 0,
+  },
+  closeActionButton: {
+    marginTop: 16,
+  },
+  honeypot: {
+    position: 'absolute',
+    left: '-9999px',
+    opacity: 0,
+    height: 0,
+    width: 0,
+    pointerEvents: 'none',
+  },
+  fileInput: {
+    display: 'none',
+  },
+  screenshotButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+} satisfies Record<string, React.CSSProperties>
+
+type StyleName = keyof typeof STYLES
+
+const POSITION_CLASS_BY_POSITION = {
+  'bottom-right': 'pos-br',
+  'bottom-left': 'pos-bl',
+  'top-right': 'pos-tr',
+  'top-left': 'pos-tl',
+} as const satisfies Record<NonNullable<FeedbackWidgetProps['position']>, string>
+
+const POPUP_POSITION_CLASS_BY_POSITION = {
+  'bottom-right': 'popup-pos-br',
+  'bottom-left': 'popup-pos-bl',
+  'top-right': 'popup-pos-tr',
+  'top-left': 'popup-pos-tl',
+} as const satisfies Record<NonNullable<FeedbackWidgetProps['position']>, string>
+
+const POSITION_STYLES = {
+  'pos-br': { bottom: 20, right: 20 },
+  'pos-bl': { bottom: 20, left: 20 },
+  'pos-tr': { top: 20, right: 20 },
+  'pos-tl': { top: 20, left: 20 },
+  'popup-pos-br': { bottom: 0, right: 0 },
+  'popup-pos-bl': { bottom: 0, left: 0 },
+  'popup-pos-tr': { top: 0, right: 0 },
+  'popup-pos-tl': { top: 0, left: 0 },
+} satisfies Record<string, React.CSSProperties>
+
+const CSS_UNITLESS_PROPERTIES = new Set([
+  'opacity',
+  'zIndex',
+  'fontWeight',
+  'lineHeight',
+  'flex',
+  'flexGrow',
+  'flexShrink',
+  'order',
+])
+
+function toKebabCase(property: string) {
+  return property.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)
+}
+
+function toCssValue(property: string, value: string | number) {
+  if (typeof value === 'number' && value !== 0 && !CSS_UNITLESS_PROPERTIES.has(property)) {
+    return `${value}px`
+  }
+
+  return String(value)
+}
+
+function styleToDeclarations(style: React.CSSProperties) {
+  return Object.entries(style)
+    .filter((entry): entry is [string, string | number] => entry[1] !== null && entry[1] !== undefined)
+    .map(([property, value]) => `${toKebabCase(property)}: ${toCssValue(property, value)};`)
+    .join(' ')
+}
+
+function sanitizeCssCustomPropertyValue(value: string) {
+  if (/[;{}<>]|\/\*|\*\//.test(value)) {
+    return DEFAULT_COLORS.primary
+  }
+
+  return value
+}
+
+function buildScopedCss(instanceId: string, primaryColor: string) {
+  const scope = `ofl-${instanceId}`
+  const rules = Object.entries(STYLES).map(([name, style]) => {
+    const declarations = styleToDeclarations(style)
+    const customProperty = name === 'container'
+      ? ` --ofl-primary: ${sanitizeCssCustomPropertyValue(primaryColor)};`
+      : ''
+
+    return `.${scope}-${name} { ${declarations}${customProperty} }`
+  })
+
+  for (const [name, style] of Object.entries(POSITION_STYLES)) {
+    rules.push(`.${scope}-${name} { ${styleToDeclarations(style)} }`)
+  }
+
+  return rules.join('\n')
+}
+
 export function FeedbackWidget({
   apiEndpoint = '/api/feedback',
   projectId,
   position = 'bottom-right',
   primaryColor = DEFAULT_COLORS.primary,
+  nonce,
   buttonText = 'Feedback',
   placeholder = 'Describe your feedback, bug, or feature request...',
   collectEmail = true,
@@ -51,7 +451,6 @@ export function FeedbackWidget({
   const [feedbackId, setFeedbackId] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<'category' | 'feature_area' | 'priority' | null>(null)
   const [patching, setPatching] = useState(false)
-  const [featureAreaDraft, setFeatureAreaDraft] = useState('')
 
   const reactId = useId()
   const instanceId = reactId.replace(/:/g, '')
@@ -67,20 +466,9 @@ export function FeedbackWidget({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Position styles
-  const positionStyles: Record<string, React.CSSProperties> = {
-    'bottom-right': { bottom: 20, right: 20 },
-    'bottom-left': { bottom: 20, left: 20 },
-    'top-right': { top: 20, right: 20 },
-    'top-left': { top: 20, left: 20 },
-  }
-
-  const popupAnchorStyles: Record<string, React.CSSProperties> = {
-    'bottom-right': { bottom: 0, right: 0 },
-    'bottom-left': { bottom: 0, left: 0 },
-    'top-right': { top: 0, right: 0 },
-    'top-left': { top: 0, left: 0 },
-  }
+  const cssText = buildScopedCss(instanceId, primaryColor)
+  const cls = (...names: Array<StyleName | string | false | null | undefined>) =>
+    names.filter(Boolean).map((name) => `ofl-${instanceId}-${name}`).join(' ')
 
   // Reset state when closing
   const handleClose = () => {
@@ -106,7 +494,6 @@ export function FeedbackWidget({
         setClassification(null)
         setFeedbackId(null)
         setEditingField(null)
-        setFeatureAreaDraft('')
       }, 300)
     } else if (hadError) {
       setTimeout(() => {
@@ -333,259 +720,12 @@ export function FeedbackWidget({
     if (!ok) setClassification(prev)
   }
 
-  // Styles
-  const styles = {
-    container: {
-      position: 'fixed' as const,
-      zIndex: 99999,
-      // Inter first (Floom design system), system-ui as graceful fallback for
-      // consumers that don't load Inter. Children inherit via fontFamily: inherit.
-      fontFamily: '"Inter", "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      width: 48,
-      height: 48,
-      ...positionStyles[position],
-    },
-    button: {
-      width: 48,
-      height: 48,
-      borderRadius: '50%',
-      backgroundColor: primaryColor,
-      border: 'none',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-      transition: 'transform 0.2s, box-shadow 0.2s',
-    },
-    popup: {
-      position: 'absolute' as const,
-      width: 320,
-      // iPhone SE (320px viewport) was previously flush to the edge / overflowing.
-      maxWidth: 'calc(100vw - 24px)',
-      maxHeight: '75vh',
-      backgroundColor: DEFAULT_COLORS.bg,
-      borderRadius: 12,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column' as const,
-    },
-    header: {
-      padding: '12px 16px',
-      borderBottom: `1px solid ${DEFAULT_COLORS.border}`,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    title: {
-      fontSize: 14,
-      fontWeight: 600,
-      color: DEFAULT_COLORS.text,
-      margin: 0,
-    },
-    closeButton: {
-      fontFamily: 'inherit',
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      width: 44,
-      height: 44,
-      padding: 10,
-      color: DEFAULT_COLORS.textMuted,
-      fontSize: 18,
-      lineHeight: 1,
-    },
-    srOnly: {
-      position: 'absolute' as const,
-      width: 1,
-      height: 1,
-      padding: 0,
-      margin: -1,
-      overflow: 'hidden',
-      clip: 'rect(0, 0, 0, 0)',
-      whiteSpace: 'nowrap' as const,
-      border: 0,
-    },
-    body: {
-      padding: 16,
-      overflowY: 'auto' as const,
-      flex: 1,
-    },
-    textarea: {
-      width: '100%',
-      minHeight: 100,
-      padding: 12,
-      border: `1px solid ${DEFAULT_COLORS.border}`,
-      borderRadius: 8,
-      fontSize: 14,
-      resize: 'vertical' as const,
-      fontFamily: 'inherit',
-      boxSizing: 'border-box' as const,
-    },
-    emailInput: {
-      width: '100%',
-      height: 40,
-      padding: '8px 12px',
-      border: `1px solid ${DEFAULT_COLORS.border}`,
-      borderRadius: 8,
-      fontSize: 14,
-      fontFamily: 'inherit',
-      boxSizing: 'border-box' as const,
-      marginTop: 8,
-    },
-    subscribeRow: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      marginTop: 8,
-      color: DEFAULT_COLORS.textMuted,
-      fontSize: 12,
-    },
-    subscribeLabel: {
-      color: DEFAULT_COLORS.textMuted,
-      fontSize: 12,
-      cursor: 'pointer',
-    },
-    checkbox: {
-      fontFamily: 'inherit',
-      width: 14,
-      height: 14,
-      margin: 0,
-    },
-    screenshotPreview: {
-      marginTop: 8,
-      position: 'relative' as const,
-    },
-    previewImage: {
-      width: '100%',
-      maxHeight: 120,
-      objectFit: 'cover' as const,
-      borderRadius: 8,
-      border: `1px solid ${DEFAULT_COLORS.border}`,
-    },
-    removeButton: {
-      fontFamily: 'inherit',
-      position: 'absolute' as const,
-      top: 4,
-      right: 4,
-      width: 44,
-      height: 44,
-      borderRadius: '50%',
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      color: 'white',
-      border: 'none',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: 14,
-    },
-    actions: {
-      display: 'flex',
-      gap: 8,
-      marginTop: 12,
-    },
-    actionButton: {
-      fontFamily: 'inherit',
-      flex: 1,
-      padding: '10px 16px',
-      minHeight: 44,
-      borderRadius: 8,
-      border: 'none',
-      cursor: 'pointer',
-      fontSize: 14,
-      fontWeight: 500,
-    },
-    primaryButton: {
-      backgroundColor: primaryColor,
-      color: 'white',
-    },
-    secondaryButton: {
-      backgroundColor: DEFAULT_COLORS.border,
-      color: DEFAULT_COLORS.text,
-    },
-    badge: {
-      display: 'inline-block',
-      padding: '4px 8px',
-      borderRadius: 4,
-      fontSize: 12,
-      fontWeight: 500,
-      marginRight: 6,
-      marginBottom: 6,
-    },
-    badgeButton: {
-      // Make the colored badge clickable to enter edit mode without changing
-      // the visual treatment; cursor signals it's actionable.
-      fontFamily: 'inherit',
-      border: 'none',
-      cursor: 'pointer',
-      // Same vertical alignment as <span> badges so heights match in the row.
-      lineHeight: 1,
-    },
-    editSelect: {
-      fontFamily: 'inherit',
-      fontSize: 12,
-      padding: '4px 6px',
-      borderRadius: 4,
-      border: `1px solid ${DEFAULT_COLORS.border}`,
-      marginRight: 6,
-      marginBottom: 6,
-      backgroundColor: DEFAULT_COLORS.bg,
-      color: DEFAULT_COLORS.text,
-    },
-    editInput: {
-      fontFamily: 'inherit',
-      fontSize: 12,
-      padding: '4px 6px',
-      borderRadius: 4,
-      border: `1px solid ${DEFAULT_COLORS.border}`,
-      marginRight: 6,
-      marginBottom: 6,
-      width: 110,
-      backgroundColor: DEFAULT_COLORS.bg,
-      color: DEFAULT_COLORS.text,
-    },
-    successMessage: {
-      textAlign: 'center' as const,
-      padding: 20,
-    },
-    checkmark: {
-      width: 48,
-      height: 48,
-      borderRadius: '50%',
-      backgroundColor: DEFAULT_COLORS.success,
-      color: 'white',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: 24,
-      margin: '0 auto 16px',
-    },
-    errorMark: {
-      width: 48,
-      height: 48,
-      borderRadius: '50%',
-      backgroundColor: '#dc2626',
-      color: 'white',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: 24,
-      margin: '0 auto 16px',
-    },
-    hint: {
-      fontSize: 12,
-      color: DEFAULT_COLORS.textMuted,
-      marginTop: 8,
-    },
-  }
-
   return (
-    <div style={styles.container}>
+    <div className={cls('container', POSITION_CLASS_BY_POSITION[position])}>
+      <style nonce={nonce}>{cssText}</style>
       <button
         ref={fabRef}
-        style={styles.button}
+        className={cls('button')}
         onClick={() => setIsOpen(true)}
         title={buttonText}
         aria-label={buttonText}
@@ -594,7 +734,7 @@ export function FeedbackWidget({
         aria-controls={popupId}
         tabIndex={isOpen ? -1 : 0}
       >
-        {/* lucide MessageSquareText — uniform stroke-1.75 per Floom UI bar */}
+        {/* lucide MessageSquareText - uniform stroke-1.75 per Floom UI bar */}
         <svg
           width="22"
           height="22"
@@ -617,40 +757,40 @@ export function FeedbackWidget({
         <div
           ref={popupRef}
           id={popupId}
-          style={{ ...styles.popup, ...popupAnchorStyles[position] }}
+          className={cls('popup', POPUP_POSITION_CLASS_BY_POSITION[position])}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={descriptionId}
         >
-          <div style={styles.header}>
-            <h3 id={titleId} style={styles.title}>Send feedback</h3>
-            <button style={styles.closeButton} onClick={handleClose} aria-label="Close feedback">
+          <div className={cls('header')}>
+            <h3 id={titleId} className={cls('title')}>Send feedback</h3>
+            <button className={cls('closeButton')} onClick={handleClose} aria-label="Close feedback">
               ×
             </button>
           </div>
 
-          <div style={styles.body}>
-            <p id={descriptionId} style={styles.srOnly}>
+          <div className={cls('body')}>
+            <p id={descriptionId} className={cls('srOnly')}>
               Send a feedback message with an optional screenshot and email address.
             </p>
 
             {error ? (
-              <div style={styles.successMessage} role="alert" aria-live="assertive">
-                <div style={styles.errorMark}>✕</div>
-                <p style={{ fontSize: 14, color: DEFAULT_COLORS.text, marginBottom: 12 }}>
+              <div className={cls('successMessage')} role="alert" aria-live="assertive">
+                <div className={cls('errorMark')}>✕</div>
+                <p className={cls('feedbackText')}>
                   {error}
                 </p>
-                <div style={styles.actions}>
+                <div className={cls('actions')}>
                   <button
-                    style={{ ...styles.actionButton, ...styles.primaryButton }}
+                    className={cls('actionButton', 'primaryButton')}
                     onClick={handleSend}
                     disabled={isSending}
                   >
                     {isSending ? 'Sending...' : 'Retry'}
                   </button>
                   <button
-                    style={{ ...styles.actionButton, ...styles.secondaryButton }}
+                    className={cls('actionButton', 'secondaryButton')}
                     onClick={handleClose}
                   >
                     Close
@@ -659,9 +799,9 @@ export function FeedbackWidget({
               </div>
             ) : isSent ? (
               // Success state - editable post-submit
-              <div style={styles.successMessage} role="status" aria-live="polite">
-                <div style={styles.checkmark}>✓</div>
-                <p style={{ fontSize: 14, color: DEFAULT_COLORS.text, marginBottom: 12 }}>
+              <div className={cls('successMessage')} role="status" aria-live="polite">
+                <div className={cls('checkmark')}>✓</div>
+                <p className={cls('feedbackText')}>
                   {aiResponse}
                 </p>
 
@@ -669,16 +809,7 @@ export function FeedbackWidget({
                 {email.trim() && feedbackId && (
                   <label
                     htmlFor={`${subscribeId}-after`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      color: DEFAULT_COLORS.textMuted,
-                      marginBottom: 12,
-                      cursor: 'pointer',
-                    }}
+                    className={cls('subscribeAfterLabel')}
                   >
                     <input
                       id={`${subscribeId}-after`}
@@ -686,11 +817,11 @@ export function FeedbackWidget({
                       checked={subscribe}
                       disabled={patching}
                       onChange={(e) => handleToggleSubscribeAfterSend(e.target.checked)}
-                      style={{ width: 14, height: 14, margin: 0, cursor: 'pointer' }}
+                      className={cls('checkbox')}
                     />
                     {subscribe ? (
                       <span>
-                        We'll email <span style={{ wordBreak: 'break-all' }}>{email.trim()}</span> with updates
+                        We'll email <span className={cls('subscribeAfterEmail')}>{email.trim()}</span> with updates
                       </span>
                     ) : (
                       <span>Email me when this is addressed</span>
@@ -700,7 +831,7 @@ export function FeedbackWidget({
 
                 {/* Editable classification badges - click to correct the AI */}
                 {classification && feedbackId && (
-                  <div style={{ marginBottom: 4 }}>
+                  <div className={cls('badgeRow')}>
                     {editingField === 'category' ? (
                       <select
                         autoFocus
@@ -708,7 +839,7 @@ export function FeedbackWidget({
                         disabled={patching}
                         onBlur={() => setEditingField(null)}
                         onChange={(e) => handleEditClassification('suggested_category', e.target.value)}
-                        style={{ ...styles.editSelect }}
+                        className={cls('editSelect')}
                         aria-label="Edit category"
                       >
                         {['bug', 'feature', 'question', 'billing', 'praise', 'other'].map((v) => (
@@ -719,7 +850,7 @@ export function FeedbackWidget({
                       <button
                         type="button"
                         onClick={() => setEditingField('category')}
-                        style={{ ...styles.badge, ...styles.badgeButton, backgroundColor: '#dbeafe', color: '#1e40af' }}
+                        className={cls('badge', 'badgeButton', 'categoryBadge')}
                         aria-label={`Category: ${classification.category} (click to edit)`}
                         title="Click to edit"
                       >
@@ -746,14 +877,14 @@ export function FeedbackWidget({
                           if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
                           if (e.key === 'Escape') setEditingField(null)
                         }}
-                        style={{ ...styles.editInput }}
+                        className={cls('editInput')}
                         aria-label="Edit feature area"
                       />
                     ) : (
                       <button
                         type="button"
                         onClick={() => setEditingField('feature_area')}
-                        style={{ ...styles.badge, ...styles.badgeButton, backgroundColor: '#f3e8ff', color: '#7c3aed' }}
+                        className={cls('badge', 'badgeButton', 'featureAreaBadge')}
                         aria-label={`Area: ${classification.feature_area} (click to edit)`}
                         title="Click to edit"
                       >
@@ -770,7 +901,7 @@ export function FeedbackWidget({
                         disabled={patching}
                         onBlur={() => setEditingField(null)}
                         onChange={(e) => handleEditClassification('suggested_priority', e.target.value)}
-                        style={{ ...styles.editSelect }}
+                        className={cls('editSelect')}
                         aria-label="Edit priority"
                       >
                         <option value="high">P0 (high)</option>
@@ -781,16 +912,13 @@ export function FeedbackWidget({
                       <button
                         type="button"
                         onClick={() => setEditingField('priority')}
-                        style={{
-                          ...styles.badge,
-                          ...styles.badgeButton,
-                          backgroundColor:
-                            classification.priority === 'P0' ? '#fee2e2' :
-                            classification.priority === 'P1' ? '#fef3c7' : '#dcfce7',
-                          color:
-                            classification.priority === 'P0' ? '#dc2626' :
-                            classification.priority === 'P1' ? '#d97706' : '#16a34a',
-                        }}
+                        className={cls(
+                          'badge',
+                          'badgeButton',
+                          classification.priority === 'P0' && 'priorityHighBadge',
+                          classification.priority === 'P1' && 'priorityMediumBadge',
+                          classification.priority !== 'P0' && classification.priority !== 'P1' && 'priorityLowBadge',
+                        )}
                         aria-label={`Priority: ${classification.priority} (click to edit)`}
                         title="Click to edit"
                       >
@@ -801,13 +929,13 @@ export function FeedbackWidget({
                 )}
 
                 {feedbackId && (
-                  <p style={{ fontSize: 11, color: DEFAULT_COLORS.textMuted, marginTop: 8, marginBottom: 0 }}>
+                  <p className={cls('correctionHint')}>
                     Click any badge to correct it
                   </p>
                 )}
 
                 <button
-                  style={{ ...styles.actionButton, ...styles.secondaryButton, marginTop: 16 }}
+                  className={cls('actionButton', 'secondaryButton', 'closeActionButton')}
                   onClick={handleClose}
                 >
                   Close
@@ -824,14 +952,7 @@ export function FeedbackWidget({
                   onChange={(e) => setHoneypot(e.target.value)}
                   tabIndex={-1}
                   autoComplete="off"
-                  style={{
-                    position: 'absolute',
-                    left: '-9999px',
-                    opacity: 0,
-                    height: 0,
-                    width: 0,
-                    pointerEvents: 'none',
-                  }}
+                  className={cls('honeypot')}
                   aria-hidden="true"
                 />
 
@@ -843,7 +964,7 @@ export function FeedbackWidget({
                     id={messageId}
                     name="message"
                     ref={textareaRef}
-                    style={styles.textarea}
+                    className={cls('textarea')}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={placeholder}
@@ -860,7 +981,7 @@ export function FeedbackWidget({
                       name="email"
                       type="email"
                       autoComplete="email"
-                      style={styles.emailInput}
+                      className={cls('emailInput')}
                       value={email}
                       onChange={(e) => {
                         const wasEmpty = email.trim().length === 0
@@ -876,17 +997,17 @@ export function FeedbackWidget({
                       placeholder={emailPlaceholder}
                       aria-label={emailPlaceholder}
                     />
-                    <div style={styles.subscribeRow}>
+                    <div className={cls('subscribeRow')}>
                       <input
                         id={subscribeId}
                         name="subscribe"
                         type="checkbox"
-                        style={styles.checkbox}
+                        className={cls('checkbox')}
                         checked={Boolean(email.trim() && subscribe)}
                         disabled={!email.trim()}
                         onChange={(e) => setSubscribe(e.target.checked)}
                       />
-                      <label htmlFor={subscribeId} style={styles.subscribeLabel}>
+                      <label htmlFor={subscribeId} className={cls('subscribeLabel')}>
                         Email me when this is addressed
                       </label>
                     </div>
@@ -894,10 +1015,10 @@ export function FeedbackWidget({
                 )}
 
                 {screenshotPreview && (
-                  <div style={styles.screenshotPreview}>
-                    <img src={screenshotPreview} alt="Screenshot" style={styles.previewImage} />
+                  <div className={cls('screenshotPreview')}>
+                    <img src={screenshotPreview} alt="Screenshot" className={cls('previewImage')} />
                     <button
-                      style={styles.removeButton}
+                      className={cls('removeButton')}
                       aria-label="Remove screenshot"
                       onClick={() => {
                         setScreenshotFile(null)
@@ -913,16 +1034,16 @@ export function FeedbackWidget({
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  style={{ display: 'none' }}
+                  className={cls('fileInput')}
                   onChange={(e) => {
                     const file = e.target.files?.[0]
                     if (file) handleScreenshotSelect(file)
                   }}
                 />
 
-                <div style={styles.actions}>
+                <div className={cls('actions')}>
                   <button
-                    style={{ ...styles.actionButton, ...styles.secondaryButton, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                    className={cls('actionButton', 'secondaryButton', 'screenshotButton')}
                     onClick={() => fileInputRef.current?.click()}
                     aria-label="Attach screenshot"
                   >
@@ -935,11 +1056,7 @@ export function FeedbackWidget({
                     Screenshot
                   </button>
                   <button
-                    style={{
-                      ...styles.actionButton,
-                      ...styles.primaryButton,
-                      opacity: !message.trim() || isSending ? 0.6 : 1,
-                    }}
+                    className={cls('actionButton', 'primaryButton', (!message.trim() || isSending) && 'disabledButton')}
                     onClick={handleSend}
                     disabled={!message.trim() || isSending}
                   >
@@ -947,7 +1064,7 @@ export function FeedbackWidget({
                   </button>
                 </div>
 
-                <p style={styles.hint}>
+                <p className={cls('hint')}>
                   Tip: Paste (Cmd+V) or drag an image to attach a screenshot
                 </p>
               </>

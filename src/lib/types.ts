@@ -44,6 +44,8 @@ export interface FeedbackWidgetProps {
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
   /** Primary color for the widget */
   primaryColor?: string
+  /** CSP nonce for the generated widget stylesheet */
+  nonce?: string
   /** Custom text for the button tooltip */
   buttonText?: string
   /** Custom placeholder for the message input */
