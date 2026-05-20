@@ -151,19 +151,23 @@ async function runSend(positional: string[], flags: CliFlags): Promise<number> {
     return 1
   }
 
-  const formData = new FormData()
-  formData.append('message', message)
-  formData.append('website', '') // honeypot (empty = real submission)
-  if (flags.email) formData.append('email', flags.email)
-  formData.append('subscribe', flags.subscribe && flags.email ? 'true' : 'false')
-  if (flags.projectId) formData.append('project', flags.projectId)
+  // Send as application/json by default — cleaner wire format than
+  // multipart for the CLI's purposes (no screenshots, no binary data),
+  // and easier to debug with curl. The server accepts both.
+  const reqBody: Record<string, unknown> = {
+    message,
+    website: '', // honeypot (empty = real submission)
+    subscribe: Boolean(flags.subscribe && flags.email),
+  }
+  if (flags.email) reqBody.email = flags.email
+  if (flags.projectId) reqBody.project = flags.projectId
 
   let res: Response
   try {
     res = await fetch(flags.apiUrl, {
       method: 'POST',
-      headers: { 'x-page-url': 'cli' },
-      body: formData,
+      headers: { 'content-type': 'application/json', 'x-page-url': 'cli' },
+      body: JSON.stringify(reqBody),
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -171,32 +175,32 @@ async function runSend(positional: string[], flags: CliFlags): Promise<number> {
     return 2
   }
 
-  let body: ServerResponse
+  let resBody: ServerResponse
   try {
-    body = (await res.json()) as ServerResponse
+    resBody = (await res.json()) as ServerResponse
   } catch {
-    body = { error: `Non-JSON response (HTTP ${res.status})` }
+    resBody = { error: `Non-JSON response (HTTP ${res.status})` }
   }
 
   if (!res.ok) {
-    process.stderr.write(`Error: server returned HTTP ${res.status}: ${body.error || 'unknown'}\n`)
-    if (flags.json) process.stderr.write(JSON.stringify(body, null, 2) + '\n')
+    process.stderr.write(`Error: server returned HTTP ${res.status}: ${resBody.error || 'unknown'}\n`)
+    if (flags.json) process.stderr.write(JSON.stringify(resBody, null, 2) + '\n')
     return 3
   }
 
   if (flags.json) {
-    process.stdout.write(JSON.stringify(body, null, 2) + '\n')
+    process.stdout.write(JSON.stringify(resBody, null, 2) + '\n')
     return 0
   }
 
   // Human-readable. Mirrors the success-state synthesis of the widget:
   // confirm receipt, echo the user's words (as the title since we don't
   // re-echo the full input back), promise + GitHub tracking link.
-  const aiTitle = body.ai_data?.title
+  const aiTitle = resBody.ai_data?.title
   const issueLine =
-    typeof body.github_issue_number === 'number'
-      ? `  Tracked as issue #${body.github_issue_number}${
-          body.github_issue_url ? ` — ${body.github_issue_url}` : ''
+    typeof resBody.github_issue_number === 'number'
+      ? `  Tracked as issue #${resBody.github_issue_number}${
+          resBody.github_issue_url ? ` — ${resBody.github_issue_url}` : ''
         }`
       : '  (No GitHub issue was created. GITHUB_TOKEN / GITHUB_FEEDBACK_REPO may be unset on the server.)'
 

@@ -169,10 +169,12 @@ test('CLI: reads message from stdin when no positional', async () => {
   }
 })
 
-test('CLI: --email + --subscribe forwarded in the form', async () => {
+test('CLI: --email + --subscribe forwarded in the JSON body', async () => {
   let receivedBody = ''
-  const server = await spawnFakeServer(({ res, body }) => {
+  let receivedContentType = ''
+  const server = await spawnFakeServer(({ req, res, body }) => {
     receivedBody = body
+    receivedContentType = req.headers['content-type'] || ''
     res.statusCode = 200
     res.setHeader('content-type', 'application/json')
     res.end(JSON.stringify({ id: 'a' }))
@@ -183,8 +185,11 @@ test('CLI: --email + --subscribe forwarded in the form', async () => {
       { env: { OFL_API_URL: server.url } },
     )
     assert.equal(r.code, 0, r.stderr)
-    assert.match(receivedBody, /name="email"[\s\S]*fede@example\.com/)
-    assert.match(receivedBody, /name="subscribe"[\s\S]*true/)
+    assert.match(receivedContentType, /application\/json/)
+    const parsed = JSON.parse(receivedBody)
+    assert.equal(parsed.email, 'fede@example.com')
+    assert.equal(parsed.subscribe, true)
+    assert.equal(parsed.message, 'hi')
   } finally {
     await server.close()
   }

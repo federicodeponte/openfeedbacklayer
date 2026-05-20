@@ -168,20 +168,52 @@ export async function handleFeedback(request: Request, deps: FeedbackDeps): Prom
       return json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    const formData = await request.formData()
+    // Accept both multipart/form-data (browser widget) and
+    // application/json (CLI / agents / CI / curl). The widget always
+    // sends multipart for the screenshot path, but programmatic callers
+    // expect the standard JSON body. Without this branch they'd crash
+    // on request.formData() with an unhelpful 500 (Kimi virgin-test P1).
+    const contentType = request.headers.get('content-type') || ''
+    let honeypot: string | null = null
+    let messageRaw = ''
+    let projectId: string | null = null
+    let rawEmail = ''
+    let subscribeFlag = false
+    let screenshot: File | null = null
 
-    const honeypot = formData.get('website') as string
+    if (contentType.includes('application/json')) {
+      let body: Record<string, unknown>
+      try {
+        body = (await request.json()) as Record<string, unknown>
+      } catch {
+        return json({ error: 'Invalid JSON' }, { status: 400 })
+      }
+      honeypot = typeof body.website === 'string' ? body.website : null
+      messageRaw = typeof body.message === 'string' ? body.message : ''
+      projectId = typeof body.project === 'string' ? body.project : null
+      rawEmail = typeof body.email === 'string' ? body.email.trim() : ''
+      subscribeFlag = body.subscribe === true || body.subscribe === 'true'
+      // Screenshots over JSON aren't supported (binary in JSON would need
+      // base64 + a separate decode path); CLI/agent callers don't
+      // typically attach screenshots anyway.
+      screenshot = null
+    } else {
+      const formData = await request.formData()
+      honeypot = formData.get('website') as string | null
+      messageRaw = (formData.get('message') as string) || ''
+      projectId = (formData.get('project') as string) || null
+      rawEmail = ((formData.get('email') as string) || '').trim()
+      subscribeFlag = formData.get('subscribe') === 'true'
+      screenshot = formData.get('screenshot') as File | null
+    }
+
     if (honeypot && honeypot.trim().length > 0) {
       console.log('[Feedback] Bot detected via honeypot')
       return json({ id: 'fake-id', message: 'Feedback sent' })
     }
 
-    const messageRaw = formData.get('message') as string
-    const screenshot = formData.get('screenshot') as File | null
-    const projectId = (formData.get('project') as string) || null
-    const rawEmail = ((formData.get('email') as string) || '').trim()
     const submitterEmail = rawEmail && isValidEmail(rawEmail) ? rawEmail : null
-    const subscribe = Boolean(submitterEmail && formData.get('subscribe') === 'true')
+    const subscribe = Boolean(submitterEmail && subscribeFlag)
 
     if (!messageRaw?.trim()) {
       return json({ error: 'Message is required' }, { status: 400 })

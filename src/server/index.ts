@@ -37,6 +37,31 @@ export const webhookPOST = (request: Request): Promise<Response> =>
 //     ctx.params.then(({ id }) => feedbackPATCH(req, id))
 export const feedbackPATCH = (request: Request, id: string): Promise<Response> =>
   handlePatch(request, id, realPatchDeps(process.env))
+
+/**
+ * GET /api/feedback/health — cheap liveness/readiness probe for
+ * load balancers, uptime monitors, and CI smoke tests. Reports which
+ * optional integrations are configured (no secrets leaked, just
+ * presence/absence). Returns 200 unconditionally so a degraded but
+ * running deploy still answers OK.
+ *
+ *   // app/api/feedback/health/route.ts
+ *   export { feedbackHealthGET as GET } from 'openfeedbacklayer/server'
+ */
+export const feedbackHealthGET = (_request: Request): Response => {
+  const env = process.env
+  return Response.json({
+    status: 'ok',
+    integrations: {
+      supabase: Boolean(env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL),
+      gemini: Boolean(env.GEMINI_API_KEY),
+      github: Boolean(env.GITHUB_TOKEN && env.GITHUB_FEEDBACK_REPO),
+      resend: Boolean(env.RESEND_API_KEY),
+      webhook_secret: Boolean(env.GITHUB_WEBHOOK_SECRET),
+    },
+    timestamp: new Date().toISOString(),
+  })
+}
 export {
   buildFeedbackIssuePayload,
   createFeedbackIssue,

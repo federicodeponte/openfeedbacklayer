@@ -263,6 +263,45 @@ Using Gemini 2.5 Flash Lite:
 - Google Gemini 2.5 Flash Lite
 - Resend (optional, for emails)
 
+## Health endpoint
+
+A liveness/readiness probe for load balancers and uptime monitors. Mount via:
+
+```ts
+// app/api/feedback/health/route.ts
+export { feedbackHealthGET as GET } from 'openfeedbacklayer/server'
+```
+
+`GET /api/feedback/health` always returns `200` with the configured-integration matrix:
+
+```json
+{
+  "status": "ok",
+  "integrations": {
+    "supabase": true,
+    "gemini": true,
+    "github": true,
+    "resend": true,
+    "webhook_secret": false
+  },
+  "timestamp": "2026-05-20T18:45:00.000Z"
+}
+```
+
+No secrets are leaked — only presence/absence of each env var.
+
+## Programmatic POSTs (JSON)
+
+`POST /api/feedback` accepts **either** `multipart/form-data` (what the React widget sends so it can carry a screenshot) **or** `application/json` (what the CLI, CI, and AI-agent callers prefer):
+
+```bash
+curl -X POST https://your-app.com/api/feedback \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Dark mode broken","email":"you@x.com","subscribe":true}'
+```
+
+Same fields either way: `message` (required), `website` (honeypot — leave empty), `email`, `subscribe`, `project`. Screenshots are multipart-only (binary).
+
 ## CLI
 
 The widget ships with a CLI for non-browser submissions — useful from CI,
