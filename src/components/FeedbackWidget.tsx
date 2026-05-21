@@ -1228,17 +1228,20 @@ export function FeedbackWidget({
             ) : (
               // Input state
               <>
-                {/* Honeypot - hidden from users */}
-                <input
-                  type="text"
-                  name="website"
-                  value={honeypot}
-                  onChange={(e) => setHoneypot(e.target.value)}
-                  tabIndex={-1}
-                  autoComplete="off"
-                  className={cls('honeypot')}
-                  aria-hidden="true"
-                />
+                {/* Honeypot — a real bot fills `website`, humans never see
+                    it. Wrapped in an aria-hidden div (more reliably honored
+                    than aria-hidden on the input itself) so assistive tech
+                    and a11y snapshots fully skip the unlabelled control. */}
+                <div aria-hidden="true" className={cls('honeypot')}>
+                  <input
+                    type="text"
+                    name="website"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    tabIndex={-1}
+                    autoComplete="off"
+                  />
+                </div>
 
                 <div
                   onDrop={handleDrop}
