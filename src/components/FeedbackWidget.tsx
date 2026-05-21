@@ -274,12 +274,31 @@ const STYLES = {
     color: DEFAULT_COLORS.text,
     fontWeight: 500,
   },
-  refineConfirm: {
-    fontSize: 12,
-    color: DEFAULT_COLORS.success,
-    textAlign: 'center',
-    margin: '0 0 12px',
-    fontWeight: 500,
+  addedDetail: {
+    // A follow-up detail the submitter added, echoed back persistently so
+    // they can see it landed. Left-aligned, lighter than the main quote.
+    display: 'block',
+    textAlign: 'left',
+    background: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    borderRadius: 8,
+    padding: '8px 10px',
+    margin: '0 0 10px',
+  },
+  addedDetailTag: {
+    display: 'block',
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: '#16a34a',
+    marginBottom: 3,
+  },
+  addedDetailText: {
+    display: 'block',
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: DEFAULT_COLORS.text,
   },
   successMessage: {
     textAlign: 'center',
@@ -433,8 +452,17 @@ const STYLES = {
     fontSize: 13,
     whiteSpace: 'nowrap',
   },
-  closeActionButton: {
-    marginTop: 16,
+  footer: {
+    // Fixed footer of the popup — outside the scrolling body so its
+    // contents (the Done button) are always visible regardless of how
+    // tall the success card grows.
+    padding: '12px 16px',
+    borderTop: `1px solid ${DEFAULT_COLORS.border}`,
+    flexShrink: 0,
+  },
+  doneButton: {
+    width: '100%',
+    marginTop: 0,
   },
   honeypot: {
     position: 'absolute',
@@ -581,17 +609,23 @@ export function FeedbackWidget({
   const [githubIssueNumber, setGithubIssueNumber] = useState<number | null>(null)
   const [githubIssueUrl, setGithubIssueUrl] = useState<string | null>(null)
   const [quoteExpanded, setQuoteExpanded] = useState(false)
-  const [patching, setPatching] = useState(false)
+  // Two independent in-flight flags. They MUST stay separate: a single
+  // shared `patching` flag made the Subscribe button flash "Saving…" while
+  // a refine PATCH was in flight (and vice-versa) even though the email
+  // field was empty — Federico screenshot 2026-05-21 13:15.
+  const [subscribing, setSubscribing] = useState(false)
+  const [refining, setRefining] = useState(false)
   // Lets a submitter who skipped the email field still subscribe to updates
   // after seeing the success state.
   const [postSubmitEmailDraft, setPostSubmitEmailDraft] = useState('')
   // "Add a detail" escape hatch — quiet text link that expands a textarea.
-  // The follow-up PATCH re-runs Gemini server-side; the user-visible quote
-  // stays as their immutable receipt, only internal classification updates.
+  // Each successfully-sent detail is kept in addedDetails and shown back
+  // persistently in the card, so the submitter gets real proof the detail
+  // landed (the old 4s-fade "Thanks, added" gave no lasting feedback).
   const [refineOpen, setRefineOpen] = useState(false)
   const [refineDraft, setRefineDraft] = useState('')
   const [refineError, setRefineError] = useState<string | null>(null)
-  const [refineSentOk, setRefineSentOk] = useState(false)
+  const [addedDetails, setAddedDetails] = useState<string[]>([])
 
 
   const reactId = useId()
@@ -642,7 +676,9 @@ export function FeedbackWidget({
         setRefineOpen(false)
         setRefineDraft('')
         setRefineError(null)
-        setRefineSentOk(false)
+        setAddedDetails([])
+        setSubscribing(false)
+        setRefining(false)
       }, 300)
     } else if (hadError) {
       setTimeout(() => {
@@ -829,12 +865,12 @@ export function FeedbackWidget({
     }
   }
 
-  // PATCH the feedback row after submit. Used by the success-state edit UI
-  // (subscribe toggle + correct AI classification badges). The server side
-  // whitelists fields and validates each one (see feedback-patch-core.ts).
+  // PATCH the feedback row after submit. Used only by the subscribe flow
+  // (toggle + add-email). Drives the `subscribing` flag — never `refining`,
+  // so the refine button can't show a spurious loading label.
   const sendPatch = async (patch: Record<string, unknown>): Promise<boolean> => {
     if (!feedbackId) return false
-    setPatching(true)
+    setSubscribing(true)
     try {
       const res = await fetch(`${apiEndpoint}/${feedbackId}`, {
         method: 'PATCH',
@@ -846,7 +882,7 @@ export function FeedbackWidget({
     } catch {
       return false
     } finally {
-      setPatching(false)
+      setSubscribing(false)
     }
   }
 
@@ -871,17 +907,17 @@ export function FeedbackWidget({
     }
   }
 
-  // Refine flow: submitter saw the AI's summary, decided it missed or
-  // mis-classified something, typed a clarification, hit "Update". We send
-  // the follow-up to the server which re-runs Gemini on
-  // (original message + prior aiData + this follow-up) and returns the
-  // corrected ai_data. The UI then re-renders title + summary + chips.
+  // Refine flow: submitter wants to add a detail after seeing the success
+  // state. We PATCH the follow-up to the server (re-runs the AI server-side
+  // for the team's classification). On success the detail is pushed into
+  // addedDetails and shown back persistently in the card — that IS the
+  // feedback: the user sees their detail is now part of the report.
   const handleSubmitRefine = async () => {
     const followUp = refineDraft.trim()
-    if (!followUp || !feedbackId || patching) return
+    if (!followUp || !feedbackId || refining) return
 
     setRefineError(null)
-    setPatching(true)
+    setRefining(true)
     try {
       const res = await fetch(`${apiEndpoint}/${feedbackId}`, {
         method: 'PATCH',
@@ -891,35 +927,31 @@ export function FeedbackWidget({
 
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }
-        setRefineError(body?.error || "We couldn't refine that - please try again.")
+        setRefineError(body?.error || "We couldn't add that - please try again.")
         return
       }
 
       const data = (await res.json()) as { ai_data?: FeedbackAIDataLike | null }
       const refined = data.ai_data
       if (refined) {
-        // Server-side classification is the team's, not the user's view —
-        // we keep their original quote stable in the success state. Stash
-        // the refined classification + summary so a future surface (or
-        // dev callback via onSubmit) can read it.
-        setAiResponse(refined.short_summary || aiResponse)
+        // Keep the team's refreshed classification in state for the
+        // onSubmit callback consumers; the user-facing card shows their
+        // own words (original quote + added details), not the AI rephrase.
         setClassification({
           category: refined.suggested_category || 'other',
           feature_area: refined.suggested_feature_area || 'general',
           priority: formatPriority(refined.suggested_priority || 'medium'),
         })
       }
+      // Persistent acknowledgement: the detail is now shown in the card.
+      setAddedDetails((prev) => [...prev, followUp])
       setRefineDraft('')
       setRefineOpen(false)
-      setRefineSentOk(true)
-      // Fade the "Thanks, added" confirmation after a few seconds so the
-      // success card returns to its clean state.
-      window.setTimeout(() => setRefineSentOk(false), 4000)
     } catch (err) {
       console.error('[OpenFeedbackLayer] Refine error:', err)
-      setRefineError("We couldn't refine that - please try again.")
+      setRefineError("We couldn't add that - please try again.")
     } finally {
-      setPatching(false)
+      setRefining(false)
     }
   }
 
@@ -1026,6 +1058,17 @@ export function FeedbackWidget({
                     )}
                   </blockquote>
                 )}
+
+                {/* Each detail the submitter added afterwards, echoed back
+                    persistently — this is the visible proof the detail
+                    landed (the old 4s "Thanks, added" toast gave none). */}
+                {addedDetails.map((detail, i) => (
+                  <div key={i} className={cls('addedDetail')}>
+                    <span className={cls('addedDetailTag')}>You added</span>
+                    <span className={cls('addedDetailText')}>{detail}</span>
+                  </div>
+                ))}
+
                 <p className={cls('promiseLine')}>
                   We&rsquo;ll review this within 1 day.
                   {githubIssueNumber && (
@@ -1056,8 +1099,9 @@ export function FeedbackWidget({
                     submit time, show a toggle so the submitter can flip
                     subscribe. If no email was entered, show an "Add email to
                     get updates" input so they can still subscribe after the
-                    fact (Federico's review feedback). */}
-                {feedbackId && email.trim() && (
+                    fact. Hidden while the refine textarea is open to keep the
+                    card from getting button-heavy (Federico 2026-05-21). */}
+                {feedbackId && !refineOpen && email.trim() && (
                   <label
                     htmlFor={`${subscribeId}-after`}
                     className={cls('subscribeAfterLabel')}
@@ -1066,7 +1110,7 @@ export function FeedbackWidget({
                       id={`${subscribeId}-after`}
                       type="checkbox"
                       checked={subscribe}
-                      disabled={patching}
+                      disabled={subscribing}
                       onChange={(e) => handleToggleSubscribeAfterSend(e.target.checked)}
                       className={cls('checkbox')}
                     />
@@ -1080,7 +1124,7 @@ export function FeedbackWidget({
                   </label>
                 )}
 
-                {feedbackId && !email.trim() && (
+                {feedbackId && !refineOpen && !email.trim() && (
                   <form
                     onSubmit={(e) => {
                       e.preventDefault()
@@ -1102,31 +1146,22 @@ export function FeedbackWidget({
                         placeholder="you@example.com"
                         value={postSubmitEmailDraft}
                         onChange={(e) => setPostSubmitEmailDraft(e.target.value)}
-                        disabled={patching}
+                        disabled={subscribing}
                         className={cls('addEmailInput')}
                       />
                       <button
                         type="submit"
-                        disabled={patching || !postSubmitEmailDraft.trim()}
+                        disabled={subscribing || !postSubmitEmailDraft.trim()}
                         className={cls('actionButton', 'primaryButton', 'addEmailSubmit')}
                       >
-                        {patching ? 'Saving...' : 'Subscribe'}
+                        {subscribing ? 'Saving…' : 'Subscribe'}
                       </button>
                     </div>
                   </form>
                 )}
 
-                {/* Refine ("Add a detail") — quiet escape hatch. The
-                    classification chips that used to sit here are gone
-                    per multi-agent UX review; the team still gets the AI
-                    classification server-side, the submitter doesn't see
-                    or need to validate it. */}
-                {feedbackId && refineSentOk && (
-                  <p className={cls('refineConfirm')} role="status">
-                    Thanks, added.
-                  </p>
-                )}
-                {feedbackId && !refineOpen && !refineSentOk && (
+                {/* Refine ("Add a detail") — quiet escape hatch. */}
+                {feedbackId && !refineOpen && (
                   <button
                     type="button"
                     className={cls('refineToggle')}
@@ -1135,7 +1170,7 @@ export function FeedbackWidget({
                       setRefineError(null)
                     }}
                   >
-                    Add a detail
+                    {addedDetails.length > 0 ? 'Add another detail' : 'Add a detail'}
                   </button>
                 )}
 
@@ -1156,7 +1191,7 @@ export function FeedbackWidget({
                       placeholder="e.g. 'Actually it's Linux not Mac. The spinner times out at ~30s.'"
                       value={refineDraft}
                       onChange={(e) => setRefineDraft(e.target.value)}
-                      disabled={patching}
+                      disabled={refining}
                       rows={3}
                       maxLength={2000}
                       autoFocus
@@ -1175,27 +1210,20 @@ export function FeedbackWidget({
                           setRefineDraft('')
                           setRefineError(null)
                         }}
-                        disabled={patching}
+                        disabled={refining}
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         className={cls('actionButton', 'primaryButton', 'refineSubmit')}
-                        disabled={patching || !refineDraft.trim()}
+                        disabled={refining || !refineDraft.trim()}
                       >
-                        {patching ? 'Sending...' : 'Send detail'}
+                        {refining ? 'Sending…' : 'Send detail'}
                       </button>
                     </div>
                   </form>
                 )}
-
-                <button
-                  className={cls('actionButton', 'secondaryButton', 'closeActionButton')}
-                  onClick={handleClose}
-                >
-                  Done
-                </button>
               </div>
             ) : (
               // Input state
@@ -1326,6 +1354,23 @@ export function FeedbackWidget({
               </>
             )}
           </div>
+
+          {/* Fixed footer — Done lives OUTSIDE the scrolling body so it is
+              always visible no matter how tall the success card grows
+              (Federico 2026-05-21: "Done only appears on scroll"). Hidden
+              while the refine textarea is open — the actions there are
+              Cancel / Send detail, and showing Done too made the card
+              button-heavy. */}
+          {isSent && !error && !refineOpen && (
+            <div className={cls('footer')}>
+              <button
+                className={cls('actionButton', 'secondaryButton', 'doneButton')}
+                onClick={handleClose}
+              >
+                Done
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
