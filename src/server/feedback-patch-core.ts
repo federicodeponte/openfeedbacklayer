@@ -147,14 +147,19 @@ export async function handlePatch(
             geminiApiKey,
           })
 
-      if (!refined) {
-        return json(
-          { error: 'AI refinement failed - please try again or rephrase' },
-          { status: 502 },
-        )
+      if (refined) {
+        updates.ai_data = refined
+      } else {
+        // AI re-classify failed (Gemini quota exhausted, network blip,
+        // etc.). Don't dead-end the user — preserve the follow-up by
+        // appending it to message_raw so the team still sees it in DB +
+        // GitHub. The submitter's "Add a detail" still feels like it
+        // landed; the AI metadata just doesn't update this turn.
+        // Federico screenshot 2026-05-20 11:18: refine was hard-stuck on
+        // "AI refinement failed" with the same Gemini-quota error.
+        const combined = `${messageRaw}\n\n[Submitter follow-up]: ${followUp}`
+        updates.message_raw = combined
       }
-
-      updates.ai_data = refined
     }
 
     const { data, error } = await deps.supabase

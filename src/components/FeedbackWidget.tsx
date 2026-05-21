@@ -259,11 +259,20 @@ const STYLES = {
     lineHeight: 1.5,
   },
   promiseLink: {
+    // Real link: underline signals "click me".
     color: DEFAULT_COLORS.text,
     fontWeight: 500,
     textDecoration: 'underline',
     textDecorationColor: DEFAULT_COLORS.border,
     textUnderlineOffset: 3,
+  },
+  promiseRefText: {
+    // Static issue-number reference (no link, private-repo deploys). Same
+    // typographic weight as the link variant for visual continuity, but
+    // NO underline — Federico flagged the underline-without-href as a
+    // misleading affordance: it reads as clickable but does nothing.
+    color: DEFAULT_COLORS.text,
+    fontWeight: 500,
   },
   refineConfirm: {
     fontSize: 12,
@@ -408,16 +417,21 @@ const STYLES = {
     marginTop: 8,
   },
   refineCancel: {
-    flex: 0,
+    flex: '0 0 auto',
     minHeight: 0,
     padding: '6px 12px',
     fontSize: 13,
+    whiteSpace: 'nowrap',
   },
   refineSubmit: {
-    flex: 0,
+    // `flex: 0 0 auto` instead of `flex: 0` so the button sizes to its
+    // content; `whiteSpace: nowrap` stops 'Send detail' from breaking
+    // to two lines (Federico screenshot 2026-05-20 11:18).
+    flex: '0 0 auto',
     minHeight: 0,
     padding: '6px 14px',
     fontSize: 13,
+    whiteSpace: 'nowrap',
   },
   closeActionButton: {
     marginTop: 16,
@@ -1032,7 +1046,7 @@ export function FeedbackWidget({
                           issue #{githubIssueNumber} ↗
                         </a>
                       ) : (
-                        <span className={cls('promiseLink')}>issue #{githubIssueNumber}</span>
+                        <span className={cls('promiseRefText')}>issue #{githubIssueNumber}</span>
                       )}
                     </>
                   )}

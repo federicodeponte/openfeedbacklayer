@@ -133,6 +133,39 @@ test('PATCH follow_up with NO prior aiData -> falls back to analyze (no more 409
   assert.equal(body.ai_data.title, 'Sync hangs at fetching manifest')
 })
 
+test('PATCH follow_up when AI fails -> still saves text, returns 200 (no dead-end)', async () => {
+  // Federico screenshot 2026-05-20 11:18: refine was stuck on "AI
+  // refinement failed - please try again or rephrase" because the free
+  // Gemini tier was exhausted (20 reqs/day). The user had nowhere to go.
+  // Fix: when both refine and the analyze-fallback return null, we still
+  // persist the follow-up by appending it to message_raw and return 200.
+  // The team sees the added context in DB + GitHub; only the AI metadata
+  // doesn't update this turn.
+  const supabase = fakeSupabase({
+    message_raw: 'sync hangs at fetching manifest',
+    ai_data: null,
+    subscribe: false,
+  })
+  const res = await handlePatch(
+    patchReq({ follow_up: 'Actually it is Linux not Mac' }),
+    FID,
+    {
+      supabase,
+      env: { GEMINI_API_KEY: 'test' },
+      refine: async () => null,
+      analyze: async () => null, // Gemini fully down
+    },
+  )
+  assert.equal(res.status, 200, 'should NOT 502 when AI fails')
+  const body = await res.json()
+  assert.equal(body.ai_data, null, 'ai_data stays untouched')
+  // Verify the row's message_raw was updated to include the follow-up
+  const finalRow = supabase._row()
+  assert.match(finalRow.message_raw, /sync hangs at fetching manifest/)
+  assert.match(finalRow.message_raw, /\[Submitter follow-up\]:/)
+  assert.match(finalRow.message_raw, /Linux not Mac/)
+})
+
 test('PATCH follow_up with no GEMINI key -> 503', async () => {
   const supabase = fakeSupabase({ message_raw: 'x', ai_data: null, subscribe: false })
   const res = await handlePatch(patchReq({ follow_up: 'something' }), FID, {
