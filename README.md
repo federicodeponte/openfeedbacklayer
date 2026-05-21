@@ -89,8 +89,10 @@ Or see [Migration SQL](./supabase/migrations).
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJxxx
 
-# For AI classification
-GEMINI_API_KEY=AIzaSyxxx
+# For AI classification — set EITHER. OpenAI is preferred when both are
+# present (the Gemini free tier caps at 20 requests/day).
+OPENAI_API_KEY=sk-xxx          # uses gpt-4o-mini; override with OPENAI_MODEL
+GEMINI_API_KEY=AIzaSyxxx       # uses gemini-2.5-flash-lite
 
 # Optional: Email notifications
 RESEND_API_KEY=re_xxx
@@ -250,17 +252,18 @@ GROUP BY ai_data->>'suggested_category';
 
 ## Cost
 
-Using Gemini 2.5 Flash Lite:
-- ~$0.10 per 1M input tokens
-- ~$0.40 per 1M output tokens
-- Typical feedback: ~200 tokens = **$0.00002 per feedback**
+AI classification runs on whichever provider key is set — OpenAI
+(`gpt-4o-mini`) is used when `OPENAI_API_KEY` is present, otherwise
+Gemini (`gemini-2.5-flash-lite`). Both cost a fraction of a cent per
+feedback (~200 tokens). The Gemini free tier caps at 20 requests/day,
+so OpenAI is the better choice for any real deployment.
 
 ## Tech Stack
 
 - React 18+
 - Next.js 13+ (App Router)
 - Supabase (PostgreSQL + Storage)
-- Google Gemini 2.5 Flash Lite
+- OpenAI `gpt-4o-mini` or Google Gemini 2.5 Flash Lite (AI classification)
 - Resend (optional, for emails)
 
 ## Health endpoint

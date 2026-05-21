@@ -264,17 +264,21 @@ export async function handleFeedback(request: Request, deps: FeedbackDeps): Prom
     }
 
     let aiData: FeedbackAIData | null = null
+    const openaiKey = deps.env.OPENAI_API_KEY
     const geminiKey = deps.env.GEMINI_API_KEY
-    if (geminiKey) {
-      // AI classification is an optional enrichment step. A Gemini failure
-      // (timeout, rate limit, malformed JSON) must NOT 500 the user's
-      // feedback after their screenshot is uploaded and their row is about
-      // to be inserted. Catch internally, log, fall back to aiData=null.
-      // (Kimi round-4 P1.)
+    if (openaiKey || geminiKey) {
+      // AI classification is an optional enrichment step. A provider
+      // failure (timeout, rate limit, malformed JSON) must NOT 500 the
+      // user's feedback after their screenshot is uploaded and their row
+      // is about to be inserted. Catch internally, log, fall back to
+      // aiData=null. OpenAI is preferred when its key is set (the Gemini
+      // free tier caps at 20 req/day). (Kimi round-4 P1.)
       try {
         aiData = await deps.analyze({
           messageRaw,
           screenshotBase64: screenshotBase64 || undefined,
+          openaiApiKey: openaiKey,
+          openaiModel: deps.env.OPENAI_MODEL,
           geminiApiKey: geminiKey,
         })
       } catch (error) {

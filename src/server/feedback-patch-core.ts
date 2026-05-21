@@ -129,22 +129,25 @@ export async function handlePatch(
       if (readErr) throw readErr
       if (!existing) return json({ error: 'Not found' }, { status: 404 })
 
+      const openaiApiKey = deps.env.OPENAI_API_KEY
       const geminiApiKey = deps.env.GEMINI_API_KEY
-      if (!geminiApiKey) {
+      const openaiModel = deps.env.OPENAI_MODEL
+      if (!openaiApiKey && !geminiApiKey) {
         return json({ error: 'AI refinement is not configured on this deployment' }, { status: 503 })
       }
+      const aiKeys = { openaiApiKey, geminiApiKey, openaiModel }
 
       const prior = (existing.ai_data as FeedbackAIData | null) || null
       const messageRaw = (existing.message_raw as string | null) || ''
       // If we have a prior aiData, ask the model to CORRECT it given the
-      // follow-up. Otherwise (Gemini was 503'd on submit, or the env didn't
-      // have GEMINI_API_KEY then) classify (original + follow-up) fresh —
+      // follow-up. Otherwise (AI was down on submit, or the env didn't
+      // have an AI key then) classify (original + follow-up) fresh —
       // returning a 409 here would dead-end the user with no recourse.
       const refined = prior
-        ? await deps.refine({ messageRaw, followUp, prior, geminiApiKey })
+        ? await deps.refine({ messageRaw, followUp, prior, ...aiKeys })
         : await deps.analyze({
             messageRaw: `${messageRaw}\n\n[Submitter follow-up]: ${followUp}`,
-            geminiApiKey,
+            ...aiKeys,
           })
 
       if (refined) {
