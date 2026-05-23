@@ -113,6 +113,8 @@ test('feedbackHealthGET returns 200 and reports integration presence', async () 
     assert.equal(body.status, 'ok')
     assert.equal(body.integrations.supabase, true)
     assert.equal(body.integrations.gemini, true)
+    assert.equal(body.integrations.openai, false)
+    assert.equal(body.integrations.ai, true) // either provider counts
     assert.equal(body.integrations.github, false)
     assert.equal(body.integrations.resend, false)
     assert.equal(body.integrations.webhook_secret, false)

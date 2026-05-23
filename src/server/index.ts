@@ -50,11 +50,18 @@ export const feedbackPATCH = (request: Request, id: string): Promise<Response> =
  */
 export const feedbackHealthGET = (_request: Request): Response => {
   const env = process.env
+  const openai = Boolean(env.OPENAI_API_KEY)
+  const gemini = Boolean(env.GEMINI_API_KEY)
   return Response.json({
     status: 'ok',
     integrations: {
       supabase: Boolean(env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL),
-      gemini: Boolean(env.GEMINI_API_KEY),
+      // AI provider: openai is preferred when both keys are set (Gemini
+      // free tier caps at 20 req/day). `ai` is true if EITHER is set so
+      // health monitors can branch on a single field.
+      ai: openai || gemini,
+      openai,
+      gemini,
       github: Boolean(env.GITHUB_TOKEN && env.GITHUB_FEEDBACK_REPO),
       resend: Boolean(env.RESEND_API_KEY),
       webhook_secret: Boolean(env.GITHUB_WEBHOOK_SECRET),
