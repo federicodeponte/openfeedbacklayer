@@ -16,12 +16,13 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Storage policy: allow public uploads
-CREATE POLICY "Allow public uploads to feedback bucket"
-  ON storage.objects FOR INSERT
-  WITH CHECK (bucket_id = 'feedback');
+-- Uploads are intentionally server-only. The bundled route handlers receive
+-- multipart uploads, magic-byte sniff the file, enforce the 5MB cap, and then
+-- upload with SUPABASE_SERVICE_ROLE_KEY. Do not grant anon/authenticated INSERT
+-- here; direct browser uploads bypass the server-side validation path.
 
 -- Storage policy: allow public reads
+DROP POLICY IF EXISTS "Allow public reads from feedback bucket" ON storage.objects;
 CREATE POLICY "Allow public reads from feedback bucket"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'feedback');

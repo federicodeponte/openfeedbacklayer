@@ -60,25 +60,21 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS feedback_updated_at ON feedback;
 CREATE TRIGGER feedback_updated_at
   BEFORE UPDATE ON feedback
   FOR EACH ROW
   EXECUTE FUNCTION update_feedback_updated_at();
 
--- Row Level Security (optional - enable if you want user-specific access)
--- ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
-
--- Example RLS policies (uncomment and modify as needed):
---
--- -- Allow anyone to insert (for anonymous feedback)
--- CREATE POLICY "Anyone can insert feedback"
---   ON feedback FOR INSERT
---   WITH CHECK (true);
---
--- -- Only admins can view feedback
--- CREATE POLICY "Admins can view feedback"
---   ON feedback FOR SELECT
---   USING (auth.jwt() ->> 'role' = 'admin');
+-- Lock the table down by default. OpenFeedbackLayer's bundled route handlers
+-- write with SUPABASE_SERVICE_ROLE_KEY server-side; browsers never need direct
+-- PostgREST access to the feedback table. Hosts that intentionally build an
+-- admin UI can add their own read policies after applying this migration.
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feedback FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE feedback FROM anon;
+REVOKE ALL ON TABLE feedback FROM authenticated;
+REVOKE ALL ON FUNCTION update_feedback_updated_at() FROM PUBLIC;
 
 COMMENT ON TABLE feedback IS 'OpenFeedbackLayer: User feedback with AI classification';
 

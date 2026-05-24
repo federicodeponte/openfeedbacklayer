@@ -68,7 +68,10 @@ ls node_modules/openfeedbacklayer/supabase/migrations
 ```
 
 - `001_create_feedback.sql` and `002_feedback_journey.sql` are required. They
-  apply on any Postgres (no Supabase-specific objects).
+  apply on any Postgres (no Supabase-specific objects). `001` enables and
+  forces RLS on the `feedback` table and revokes direct `anon` /
+  `authenticated` access; the bundled server route writes with the Supabase
+  service role key.
 - `004_claim_stage_rpc.sql` is required if you use the subscriber journey
   (GitHub webhook stage emails). Without it the webhook cannot claim a stage
   and subscriber update emails are silently not sent.
@@ -87,20 +90,20 @@ Or see [Migration SQL](./supabase/migrations).
 
 # Required
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJxxx
+SUPABASE_SERVICE_ROLE_KEY=<supabase-service-role-key>
 
 # For AI classification — set EITHER. OpenAI is preferred when both are
 # present (the Gemini free tier caps at 20 requests/day).
-OPENAI_API_KEY=sk-xxx          # uses gpt-4o-mini; override with OPENAI_MODEL
-GEMINI_API_KEY=AIzaSyxxx       # uses gemini-2.5-flash-lite
+OPENAI_API_KEY=<openai-api-key>          # uses gpt-4o-mini; override with OPENAI_MODEL
+GEMINI_API_KEY=<gemini-api-key>       # uses gemini-2.5-flash-lite
 
 # Optional: Email notifications
-RESEND_API_KEY=re_xxx
+RESEND_API_KEY=<resend-api-key>
 FEEDBACK_NOTIFY_EMAIL=you@example.com
 RESEND_FROM_EMAIL=feedback@yourdomain.com
 
 # Optional: GitHub feedback journey
-GITHUB_TOKEN=github_pat_xxx
+GITHUB_TOKEN=<github-token>
 GITHUB_FEEDBACK_REPO=owner/name
 GITHUB_WEBHOOK_SECRET=change-me
 ```
@@ -243,7 +246,11 @@ GROUP BY ai_data->>'suggested_category';
 - **Screenshot upload** - server-side magic-byte sniff (PNG / JPEG / GIF /
   WebP) before upload, hard 5MB size cap. A `.png` that is actually
   HTML/JS is rejected with 415, defeating stored-XSS via the public bucket.
-- **Supabase RLS** - Enable Row Level Security for access control
+  The optional storage migration does not grant public upload access; uploads
+  go through the server route.
+- **Supabase RLS** - The feedback table migration enables and forces RLS,
+  revokes direct `anon` / `authenticated` table access, and expects writes to
+  go through the bundled service-role server route
 - **Server-only RPC** - `claim_feedback_stage` is REVOKEd from
   PUBLIC/anon/authenticated; only `service_role` may call it
 - **Untrusted-text defanging** - feedback text is redacted (PII) and defanged
