@@ -9,19 +9,6 @@ import React, { useState, useRef, useEffect, useId } from 'react'
 import type { FeedbackWidgetProps } from '../lib/types'
 
 /**
- * Subset of FeedbackAIData the success-state UI consumes. Re-declared
- * structurally (not imported) so the widget bundle stays decoupled from
- * the server-side types file — keeps the client tree-shake clean.
- */
-interface FeedbackAIDataLike {
-  title?: string
-  short_summary?: string
-  suggested_category?: string
-  suggested_feature_area?: string
-  suggested_priority?: string
-}
-
-/**
  * Character cap on the quoted user message in the success state.
  * Submissions longer than this clamp + show a "Show more" toggle so
  * a 2,000-char rant doesn't blow out the card height before the
@@ -214,8 +201,8 @@ const STYLES = {
     width: 44,
     height: 44,
     borderRadius: 'var(--r-pill, 999px)',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    color: '#ffffff',
+    backgroundColor: 'color-mix(in srgb, var(--ofl-solid, var(--solid, #1a1a1a)) 60%, transparent)',
+    color: DEFAULT_COLORS.solidFg,
     border: 'none',
     cursor: 'pointer',
     display: 'flex',
@@ -352,7 +339,7 @@ const STYLES = {
     height: 48,
     borderRadius: 'var(--r-pill, 999px)',
     backgroundColor: DEFAULT_COLORS.success,
-    color: '#ffffff',
+    color: DEFAULT_COLORS.solidFg,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -364,7 +351,7 @@ const STYLES = {
     height: 48,
     borderRadius: 'var(--r-pill, 999px)',
     backgroundColor: DEFAULT_COLORS.negative,
-    color: '#ffffff',
+    color: DEFAULT_COLORS.solidFg,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -508,6 +495,10 @@ const STYLES = {
   doneButton: {
     width: '100%',
     marginTop: 0,
+    backgroundColor: DEFAULT_COLORS.solid,
+    color: DEFAULT_COLORS.solidFg,
+    borderColor: DEFAULT_COLORS.solid,
+    boxShadow: DEFAULT_COLORS.shadowBtn,
   },
   honeypot: {
     position: 'absolute',
@@ -598,10 +589,11 @@ function sanitizeCssCustomPropertyValue(value: string) {
 
 function buildScopedCss(instanceId: string, primaryColor: string) {
   const scope = `ofl-${instanceId}`
+  const scopedPrimaryColor = sanitizeCssCustomPropertyValue(primaryColor)
   const rules = Object.entries(STYLES).map(([name, style]) => {
     const declarations = styleToDeclarations(style)
     const customProperty = name === 'container' && primaryColor !== DEFAULT_COLORS.primary
-      ? ` --ofl-accent: ${sanitizeCssCustomPropertyValue(primaryColor)};`
+      ? ` --ofl-accent: ${scopedPrimaryColor}; --ofl-accent-soft: color-mix(in srgb, ${scopedPrimaryColor} 10%, transparent); --ofl-accent-line: color-mix(in srgb, ${scopedPrimaryColor} 26%, transparent);`
       : ''
 
     return `.${scope}-${name} { ${declarations}${customProperty} }`
@@ -612,17 +604,24 @@ function buildScopedCss(instanceId: string, primaryColor: string) {
   }
 
   rules.push(
+    `.${scope}-body { scrollbar-width: thin; scrollbar-color: ${DEFAULT_COLORS.borderStrong} transparent; }`,
+    `.${scope}-body::-webkit-scrollbar { width: 6px; }`,
+    `.${scope}-body::-webkit-scrollbar-track { background: transparent; }`,
+    `.${scope}-body::-webkit-scrollbar-thumb { background: ${DEFAULT_COLORS.borderStrong}; border-radius: 999px; }`,
     `.${scope}-button:hover { transform: translateY(-1px); box-shadow: ${DEFAULT_COLORS.shadowPop}; }`,
     `.${scope}-button:active { transform: scale(.965); }`,
-    `.${scope}-button:focus-visible { outline: none; box-shadow: ${DEFAULT_COLORS.focus}; }`,
+    `.${scope}-button:focus-visible { outline: none; box-shadow: 0 0 0 3px ${DEFAULT_COLORS.bg}, 0 0 0 5px ${DEFAULT_COLORS.primary}; }`,
     `.${scope}-actionButton:hover:not(:disabled) { transform: translateY(-1px); }`,
     `.${scope}-primaryButton:hover:not(:disabled) { background: ${DEFAULT_COLORS.solidHover}; border-color: ${DEFAULT_COLORS.solidHover}; }`,
     `.${scope}-secondaryButton:hover:not(:disabled) { background: ${DEFAULT_COLORS.bgSubtle}; border-color: ${DEFAULT_COLORS.borderStrong}; }`,
+    `.${scope}-doneButton:hover:not(:disabled) { background: ${DEFAULT_COLORS.solidHover}; border-color: ${DEFAULT_COLORS.solidHover}; }`,
     `.${scope}-actionButton:active:not(:disabled) { transform: scale(.98); }`,
-    `.${scope}-actionButton:focus-visible, .${scope}-closeButton:focus-visible, .${scope}-quoteShowMore:focus-visible, .${scope}-refineToggle:focus-visible, .${scope}-textarea:focus, .${scope}-emailInput:focus, .${scope}-addEmailInput:focus, .${scope}-refineTextarea:focus { outline: none; box-shadow: ${DEFAULT_COLORS.focus}; border-color: ${DEFAULT_COLORS.borderStrong}; }`,
+    `.${scope}-actionButton:focus-visible, .${scope}-closeButton:focus-visible, .${scope}-quoteShowMore:focus-visible, .${scope}-refineToggle:focus-visible { outline: none; box-shadow: ${DEFAULT_COLORS.focus}; border-color: ${DEFAULT_COLORS.borderStrong}; }`,
+    `.${scope}-textarea:focus-visible, .${scope}-emailInput:focus-visible, .${scope}-addEmailInput:focus-visible, .${scope}-refineTextarea:focus-visible { outline: none; border-color: ${DEFAULT_COLORS.primary}; box-shadow: 0 0 0 3px color-mix(in srgb, ${DEFAULT_COLORS.primary} 18%, transparent); }`,
     `.${scope}-textarea::placeholder, .${scope}-emailInput::placeholder, .${scope}-addEmailInput::placeholder, .${scope}-refineTextarea::placeholder { color: ${DEFAULT_COLORS.textMuted}; }`,
     `.${scope}-actionButton:disabled, .${scope}-textarea:disabled, .${scope}-emailInput:disabled, .${scope}-addEmailInput:disabled, .${scope}-refineTextarea:disabled { cursor: not-allowed; }`,
     `.${scope}-closeButton:hover { color: ${DEFAULT_COLORS.text}; background: ${DEFAULT_COLORS.bgSubtle}; border-radius: var(--r-md, 7px); }`,
+    `@media (prefers-reduced-motion: reduce) { .${scope}-button, .${scope}-closeButton, .${scope}-actionButton, .${scope}-textarea, .${scope}-emailInput, .${scope}-addEmailInput, .${scope}-refineTextarea { transition: none !important; transform: none !important; } }`,
   )
 
   return rules.join('\n')
@@ -650,13 +649,7 @@ export function FeedbackWidget({
   const [isSent, setIsSent] = useState(false)
   const [email, setEmail] = useState('')
   const [subscribe, setSubscribe] = useState(false)
-  const [aiResponse, setAiResponse] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [classification, setClassification] = useState<{
-    category: string
-    feature_area: string
-    priority: string
-  } | null>(null)
   const [honeypot, setHoneypot] = useState('')
   // Post-submit state. feedbackId returned by POST is used by PATCH for the
   // follow-up "add a detail" flow + subscribe toggle. submittedMessage is
@@ -725,8 +718,6 @@ export function FeedbackWidget({
         setSubscribe(false)
         setIsSent(false)
         setError(null)
-        setAiResponse(null)
-        setClassification(null)
         setFeedbackId(null)
         setSubmittedMessage('')
         setGithubIssueNumber(null)
@@ -828,12 +819,6 @@ export function FeedbackWidget({
     }
   }
 
-  // Format priority for display
-  const formatPriority = (priority: string) => {
-    const map: Record<string, string> = { high: 'P0', medium: 'P1', low: 'P2' }
-    return map[priority] || 'P1'
-  }
-
   // Send feedback
   const handleSend = async () => {
     if (!message.trim() || isSending) return
@@ -882,22 +867,6 @@ export function FeedbackWidget({
       setGithubIssueUrl(
         typeof result.github_issue_url === 'string' ? result.github_issue_url : null,
       )
-
-      // Internal classification is still kept in state so the post-submit
-      // PATCH /api/feedback/[id] {follow_up} round-trip can replace it on
-      // the server, but it is no longer rendered in the success card per
-      // multi-agent UX review (chips were internal triage leaking out).
-      if (aiData) {
-        setClassification({
-          category: aiData.suggested_category || 'other',
-          feature_area: aiData.suggested_feature_area || 'general',
-          priority: formatPriority(aiData.suggested_priority || 'medium'),
-        })
-        setAiResponse(aiData.short_summary || null)
-      } else {
-        setClassification(null)
-        setAiResponse(null)
-      }
 
       setIsSent(true)
 
@@ -990,18 +959,6 @@ export function FeedbackWidget({
         return
       }
 
-      const data = (await res.json()) as { ai_data?: FeedbackAIDataLike | null }
-      const refined = data.ai_data
-      if (refined) {
-        // Keep the team's refreshed classification in state for the
-        // onSubmit callback consumers; the user-facing card shows their
-        // own words (original quote + added details), not the AI rephrase.
-        setClassification({
-          category: refined.suggested_category || 'other',
-          feature_area: refined.suggested_feature_area || 'general',
-          priority: formatPriority(refined.suggested_priority || 'medium'),
-        })
-      }
       // Persistent acknowledgement: the detail is now shown in the card.
       setAddedDetails((prev) => [...prev, followUp])
       setRefineDraft('')
