@@ -212,7 +212,8 @@ export async function handleFeedback(request: Request, deps: FeedbackDeps): Prom
       return json({ id: 'fake-id', message: 'Feedback sent' })
     }
 
-    const submitterEmail = rawEmail && isValidEmail(rawEmail) ? rawEmail : null
+    const invalidEmail = Boolean(rawEmail && !isValidEmail(rawEmail))
+    const submitterEmail = rawEmail && !invalidEmail ? rawEmail : null
     const subscribe = Boolean(submitterEmail && subscribeFlag)
 
     if (!messageRaw?.trim()) {
@@ -385,6 +386,7 @@ export async function handleFeedback(request: Request, deps: FeedbackDeps): Prom
       ai_data: aiData,
       github_issue_number: githubIssue?.number ?? null,
       github_issue_url: githubIssue?.url ?? null,
+      ...(invalidEmail ? { email_warning: 'Invalid email format; subscribe was skipped' } : {}),
       message: 'Feedback received',
     })
   } catch (error) {

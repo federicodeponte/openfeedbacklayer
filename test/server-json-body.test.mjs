@@ -53,6 +53,26 @@ test('handleFeedback accepts application/json body', async () => {
   assert.equal(deps._inserted[0].message_raw, 'JSON path works')
 })
 
+test('handleFeedback returns email_warning when raw email is invalid', async () => {
+  const deps = fakeDeps()
+  const req = new Request('http://test/api/feedback', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      message: 'JSON path works',
+      website: '',
+      email: 'not-an-email',
+      subscribe: true,
+    }),
+  })
+  const res = await handleFeedback(req, deps)
+  assert.equal(res.status, 200, await res.clone().text())
+  const body = await res.json()
+  assert.equal(body.email_warning, 'Invalid email format; subscribe was skipped')
+  assert.equal(deps._inserted[0].submitter_email, null)
+  assert.equal(deps._inserted[0].subscribe, false)
+})
+
 test('handleFeedback honeypot via JSON body still triggers stealth-200', async () => {
   const deps = fakeDeps()
   const req = new Request('http://test/api/feedback', {

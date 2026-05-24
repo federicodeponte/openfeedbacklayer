@@ -69,6 +69,13 @@ test('CLI: --help prints usage', async () => {
   assert.match(r.stdout, /send/)
 })
 
+test('CLI: no args prints help and exits 0', async () => {
+  const r = await run([])
+  assert.equal(r.code, 0)
+  assert.match(r.stdout, /Usage/)
+  assert.match(r.stdout, /send/)
+})
+
 test('CLI: unknown command exits 1', async () => {
   const r = await run(['frobnicate'])
   assert.equal(r.code, 1)
@@ -86,6 +93,16 @@ test('CLI: network error exits 2', async () => {
   const r = await run(['send', 'hello'], { env: { OFL_API_URL: 'http://127.0.0.1:1/api/feedback' } })
   assert.equal(r.code, 2)
   assert.match(r.stderr, /could not reach/i)
+})
+
+test('CLI: invalid --email exits 1 before network fetch', async () => {
+  const r = await run(
+    ['send', 'hello', '--email', 'not-an-email', '--subscribe'],
+    { env: { OFL_API_URL: 'http://127.0.0.1:1/api/feedback' } },
+  )
+  assert.equal(r.code, 1)
+  assert.match(r.stderr, /Error: invalid email address: not-an-email/)
+  assert.doesNotMatch(r.stderr, /could not reach/i)
 })
 
 test('CLI: server 4xx exits 3', async () => {
@@ -147,6 +164,27 @@ test('CLI: 2xx human output mentions issue number + AI title', async () => {
     assert.match(r.stdout, /Dark mode crash/)
     assert.match(r.stdout, /issue #7/)
     assert.match(r.stdout, /https:\/\/example.com\/issues\/7/)
+  } finally {
+    await server.close()
+  }
+})
+
+test('CLI: 2xx human output surfaces server email warning on stderr', async () => {
+  const server = await spawnFakeServer(({ res }) => {
+    res.statusCode = 200
+    res.setHeader('content-type', 'application/json')
+    res.end(
+      JSON.stringify({
+        id: 'x',
+        email_warning: 'Invalid email format; subscribe was skipped',
+      }),
+    )
+  })
+  try {
+    const r = await run(['send', 'hello'], { env: { OFL_API_URL: server.url } })
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(r.stderr, /Warning: Invalid email format; subscribe was skipped/)
+    assert.match(r.stdout, /We got your message/)
   } finally {
     await server.close()
   }

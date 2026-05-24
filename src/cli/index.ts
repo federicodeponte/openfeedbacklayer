@@ -39,6 +39,8 @@ const DEFAULTS = {
   apiUrl: process.env.OFL_API_URL || 'http://localhost:3000/api/feedback',
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 function parseArgs(argv: string[]): { cmd: string; positional: string[]; flags: CliFlags } {
   const flags: CliFlags = {
     apiUrl: DEFAULTS.apiUrl,
@@ -140,6 +142,7 @@ interface ServerResponse {
   ai_data?: { title?: string; short_summary?: string } | null
   github_issue_number?: number | null
   github_issue_url?: string | null
+  email_warning?: string
   error?: string
 }
 
@@ -151,15 +154,21 @@ async function runSend(positional: string[], flags: CliFlags): Promise<number> {
     return 1
   }
 
+  const email = flags.email?.trim()
+  if (flags.email && (!email || !EMAIL_RE.test(email))) {
+    process.stderr.write(`Error: invalid email address: ${flags.email}\n`)
+    return 1
+  }
+
   // Send as application/json by default — cleaner wire format than
   // multipart for the CLI's purposes (no screenshots, no binary data),
   // and easier to debug with curl. The server accepts both.
   const reqBody: Record<string, unknown> = {
     message,
     website: '', // honeypot (empty = real submission)
-    subscribe: Boolean(flags.subscribe && flags.email),
+    subscribe: Boolean(flags.subscribe && email),
   }
-  if (flags.email) reqBody.email = flags.email
+  if (email) reqBody.email = email
   if (flags.projectId) reqBody.project = flags.projectId
 
   let res: Response
@@ -188,6 +197,10 @@ async function runSend(positional: string[], flags: CliFlags): Promise<number> {
     return 3
   }
 
+  if (resBody.email_warning) {
+    process.stderr.write(`Warning: ${resBody.email_warning}\n`)
+  }
+
   if (flags.json) {
     process.stdout.write(JSON.stringify(resBody, null, 2) + '\n')
     return 0
@@ -209,8 +222,8 @@ async function runSend(positional: string[], flags: CliFlags): Promise<number> {
       (aiTitle ? `    “${aiTitle}”\n` : '') +
       `\n  We'll review this within 1 day.\n` +
       `${issueLine}\n\n` +
-      (flags.subscribe && flags.email
-        ? `  We'll email ${flags.email} as the team triages it.\n\n`
+      (flags.subscribe && email
+        ? `  We'll email ${email} as the team triages it.\n\n`
         : ''),
   )
   return 0
@@ -237,7 +250,7 @@ async function main(): Promise<number> {
     case '':
     case 'help':
       printHelp()
-      return cmd === '' ? 1 : 0
+      return 0
     case 'version':
       printVersion()
       return 0
