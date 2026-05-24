@@ -221,6 +221,10 @@ const STYLES = {
   actionButton: {
     fontFamily: 'inherit',
     flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     padding: '10px 16px',
     minHeight: 44,
     borderRadius: 'var(--r-md, 7px)',
@@ -228,6 +232,7 @@ const STYLES = {
     cursor: 'pointer',
     fontSize: 14,
     fontWeight: 550,
+    lineHeight: 1,
     letterSpacing: 0,
     transition: `transform ${DEFAULT_COLORS.tBase} ${DEFAULT_COLORS.spring}, border-color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, box-shadow ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
@@ -848,6 +853,10 @@ export function FeedbackWidget({
     setScreenshotFile(file)
     const reader = new FileReader()
     reader.onloadend = () => setScreenshotPreview(reader.result as string)
+    reader.onerror = () => {
+      setScreenshotFile(null)
+      setScreenshotPreview(null)
+    }
     reader.readAsDataURL(file)
   }
 
@@ -1054,6 +1063,7 @@ export function FeedbackWidget({
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={descriptionId}
+          aria-busy={isSending || subscribing || refining ? 'true' : undefined}
         >
           <div className={cls('header')}>
             <h3 id={titleId} className={cls('title')}>Send feedback</h3>
@@ -1078,6 +1088,7 @@ export function FeedbackWidget({
                     className={cls('actionButton', 'primaryButton')}
                     onClick={handleSend}
                     disabled={isSending}
+                    aria-disabled={isSending}
                   >
                     {isSending ? 'Sending...' : 'Retry'}
                   </button>
@@ -1168,6 +1179,7 @@ export function FeedbackWidget({
                       type="checkbox"
                       checked={subscribe}
                       disabled={subscribing}
+                      aria-disabled={subscribing}
                       onChange={(e) => handleToggleSubscribeAfterSend(e.target.checked)}
                       className={cls('checkbox')}
                     />
@@ -1204,11 +1216,13 @@ export function FeedbackWidget({
                         value={postSubmitEmailDraft}
                         onChange={(e) => setPostSubmitEmailDraft(e.target.value)}
                         disabled={subscribing}
+                        aria-disabled={subscribing}
                         className={cls('addEmailInput')}
                       />
                       <button
                         type="submit"
                         disabled={subscribing || !postSubmitEmailDraft.trim()}
+                        aria-disabled={subscribing || !postSubmitEmailDraft.trim()}
                         className={cls('actionButton', 'primaryButton', 'addEmailSubmit')}
                       >
                         {subscribing ? 'Saving…' : 'Subscribe'}
@@ -1249,6 +1263,7 @@ export function FeedbackWidget({
                       value={refineDraft}
                       onChange={(e) => setRefineDraft(e.target.value)}
                       disabled={refining}
+                      aria-disabled={refining}
                       rows={3}
                       maxLength={2000}
                       autoFocus
@@ -1268,6 +1283,7 @@ export function FeedbackWidget({
                           setRefineError(null)
                         }}
                         disabled={refining}
+                        aria-disabled={refining}
                       >
                         Cancel
                       </button>
@@ -1275,6 +1291,7 @@ export function FeedbackWidget({
                         type="submit"
                         className={cls('actionButton', 'primaryButton', 'refineSubmit')}
                         disabled={refining || !refineDraft.trim()}
+                        aria-disabled={refining || !refineDraft.trim()}
                       >
                         {refining ? 'Sending…' : 'Send detail'}
                       </button>
@@ -1349,6 +1366,7 @@ export function FeedbackWidget({
                         className={cls('checkbox')}
                         checked={Boolean(email.trim() && subscribe)}
                         disabled={!email.trim()}
+                        aria-disabled={!email.trim()}
                         onChange={(e) => setSubscribe(e.target.checked)}
                       />
                       <label htmlFor={subscribeId} className={cls('subscribeLabel')}>
@@ -1360,7 +1378,15 @@ export function FeedbackWidget({
 
                 {screenshotPreview && (
                   <div className={cls('screenshotPreview')}>
-                    <img src={screenshotPreview} alt="Screenshot" className={cls('previewImage')} />
+                    <img
+                      src={screenshotPreview}
+                      alt="Screenshot"
+                      className={cls('previewImage')}
+                      onError={() => {
+                        setScreenshotFile(null)
+                        setScreenshotPreview(null)
+                      }}
+                    />
                     <button
                       className={cls('removeButton')}
                       aria-label="Remove screenshot"
@@ -1403,6 +1429,7 @@ export function FeedbackWidget({
                     className={cls('actionButton', 'primaryButton', (!message.trim() || isSending) && 'disabledButton')}
                     onClick={handleSend}
                     disabled={!message.trim() || isSending}
+                    aria-disabled={!message.trim() || isSending}
                   >
                     {isSending ? 'Sending...' : 'Send'}
                   </button>
