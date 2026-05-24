@@ -31,8 +31,8 @@ const DEFAULT_COLORS = {
   border: 'var(--ofl-line, var(--line, rgba(20,20,20,.08)))',
   borderStrong: 'var(--ofl-line-strong, var(--line-strong, rgba(20,20,20,.14)))',
   borderSoft: 'var(--ofl-line-soft, var(--line-soft, rgba(20,20,20,.045)))',
-  accentSoft: 'var(--ofl-accent-soft, var(--accent-soft, rgba(47,122,89,.10)))',
-  accentLine: 'var(--ofl-accent-line, var(--accent-line, rgba(47,122,89,.26)))',
+  accentSoft: 'var(--ofl-accent-soft, var(--ofl-derived-accent-soft, var(--accent-soft, rgba(47,122,89,.10))))',
+  accentLine: 'var(--ofl-accent-line, var(--ofl-derived-accent-line, var(--accent-line, rgba(47,122,89,.26))))',
   solid: 'var(--ofl-solid, var(--solid, #1a1a1a))',
   solidHover: 'var(--ofl-solid-2, var(--solid-2, #2c2c2c))',
   solidFg: 'var(--ofl-solid-fg, var(--solid-fg, #fbfbfb))',
@@ -115,6 +115,9 @@ const STYLES = {
     color: DEFAULT_COLORS.textMuted,
     fontSize: 18,
     lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     transition: `color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   srOnly: {
@@ -332,7 +335,7 @@ const STYLES = {
   },
   successMessage: {
     textAlign: 'center',
-    padding: 20,
+    padding: '24px 20px',
   },
   checkmark: {
     width: 48,
@@ -587,6 +590,43 @@ function sanitizeCssCustomPropertyValue(value: string) {
   return value
 }
 
+function XIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18 6 6 18" />
+      <path d="M6 6l12 12" />
+    </svg>
+  )
+}
+
+function CheckIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
+}
+
 function buildScopedCss(instanceId: string, primaryColor: string) {
   const scope = `ofl-${instanceId}`
   const scopedPrimaryColor = sanitizeCssCustomPropertyValue(primaryColor)
@@ -604,13 +644,14 @@ function buildScopedCss(instanceId: string, primaryColor: string) {
   }
 
   rules.push(
+    `.${scope}-container { --ofl-derived-accent-soft: color-mix(in srgb, ${DEFAULT_COLORS.primary} 10%, transparent); --ofl-derived-accent-line: color-mix(in srgb, ${DEFAULT_COLORS.primary} 26%, transparent); }`,
     `.${scope}-body { scrollbar-width: thin; scrollbar-color: ${DEFAULT_COLORS.borderStrong} transparent; }`,
     `.${scope}-body::-webkit-scrollbar { width: 6px; }`,
     `.${scope}-body::-webkit-scrollbar-track { background: transparent; }`,
     `.${scope}-body::-webkit-scrollbar-thumb { background: ${DEFAULT_COLORS.borderStrong}; border-radius: 999px; }`,
     `.${scope}-button:hover { transform: translateY(-1px); box-shadow: ${DEFAULT_COLORS.shadowPop}; }`,
     `.${scope}-button:active { transform: scale(.965); }`,
-    `.${scope}-button:focus-visible { outline: none; box-shadow: 0 0 0 3px ${DEFAULT_COLORS.bg}, 0 0 0 5px ${DEFAULT_COLORS.primary}; }`,
+    `.${scope}-button:focus-visible { outline: none; box-shadow: 0 0 0 4px ${DEFAULT_COLORS.bg}, 0 0 0 7px ${DEFAULT_COLORS.primary}, var(--ofl-shadow-btn, ${DEFAULT_COLORS.shadowBtn}); }`,
     `.${scope}-actionButton:hover:not(:disabled) { transform: translateY(-1px); }`,
     `.${scope}-primaryButton:hover:not(:disabled) { background: ${DEFAULT_COLORS.solidHover}; border-color: ${DEFAULT_COLORS.solidHover}; }`,
     `.${scope}-secondaryButton:hover:not(:disabled) { background: ${DEFAULT_COLORS.bgSubtle}; border-color: ${DEFAULT_COLORS.borderStrong}; }`,
@@ -1017,7 +1058,7 @@ export function FeedbackWidget({
           <div className={cls('header')}>
             <h3 id={titleId} className={cls('title')}>Send feedback</h3>
             <button className={cls('closeButton')} onClick={handleClose} aria-label="Close feedback">
-              ×
+              <XIcon size={20} />
             </button>
           </div>
 
@@ -1028,7 +1069,7 @@ export function FeedbackWidget({
 
             {error ? (
               <div className={cls('successMessage')} role="alert" aria-live="assertive">
-                <div className={cls('errorMark')}>✕</div>
+                <div className={cls('errorMark')}><XIcon size={24} /></div>
                 <p className={cls('feedbackText')}>
                   {error}
                 </p>
@@ -1056,7 +1097,7 @@ export function FeedbackWidget({
               // GitHub issue link. AI title / short_summary / category /
               // priority chips all stayed internal (team-side only).
               <div className={cls('successMessage')} role="status" aria-live="polite">
-                <div className={cls('checkmark')}>✓</div>
+                <div className={cls('checkmark')}><CheckIcon size={24} /></div>
                 <p className={cls('gotHeadline')}>We got your message</p>
                 {submittedMessage && (
                   <blockquote className={cls('quotedMessage')}>
@@ -1328,7 +1369,7 @@ export function FeedbackWidget({
                         setScreenshotPreview(null)
                       }}
                     >
-                      ×
+                      <XIcon size={18} />
                     </button>
                   </div>
                 )}
