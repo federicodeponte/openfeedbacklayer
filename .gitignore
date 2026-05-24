@@ -34,3 +34,4 @@ supabase/config.toml
 supabase/.temp/
 supabase/.branches/
 supabase/snippets/
+*.tgz

@@ -217,8 +217,11 @@ async function runSend(positional: string[], flags: CliFlags): Promise<number> {
         }`
       : '  (No GitHub issue was created. GITHUB_TOKEN / GITHUB_FEEDBACK_REPO may be unset on the server.)'
 
+  // No leading newline: keeps the first stdout line meaningful for
+  // `pipe | head -1` and other line-based consumers. Interactive users
+  // get their own shell prompt as separator above.
   process.stdout.write(
-    `\n  ✓ We got your message\n` +
+    `  ✓ We got your message\n` +
       (aiTitle ? `    “${aiTitle}”\n` : '') +
       `\n  We'll review this within 1 day.\n` +
       `${issueLine}\n\n` +
