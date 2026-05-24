@@ -11,8 +11,16 @@ export interface FeedbackData {
   ai_data?: FeedbackAIData | null
   project_id?: string
   status?: 'new' | 'in_progress' | 'resolved' | 'closed'
+  submitter_email?: string | null
+  subscribe?: boolean
+  github_issue_number?: number | null
+  github_issue_url?: string | null
+  journey_stage?: JourneyStage
+  last_emailed_stage?: JourneyStage | null
   created_at?: string
 }
+
+export type JourneyStage = 'received' | 'triaged' | 'in_progress' | 'shipped' | 'wont_fix'
 
 export interface FeedbackAIData {
   title: string
@@ -36,14 +44,29 @@ export interface FeedbackWidgetProps {
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
   /** Primary color for the widget */
   primaryColor?: string
+  /** CSP nonce for the generated widget stylesheet */
+  nonce?: string
   /** Custom text for the button tooltip */
   buttonText?: string
   /** Custom placeholder for the message input */
   placeholder?: string
+  /** Collect an optional submitter email (default: true) */
+  collectEmail?: boolean
+  /** Custom placeholder for the email input */
+  emailPlaceholder?: string
   /** Called after feedback is successfully submitted */
   onSubmit?: (data: FeedbackData) => void
   /** Called on error */
   onError?: (error: Error) => void
+  /**
+   * Render the "Tracked as issue #N" line in the success state as a
+   * clickable link to the GitHub issue. Default: false — most deployments
+   * point GITHUB_FEEDBACK_REPO at a PRIVATE repo (floomhq/skills-neo,
+   * etc.), in which case the link 404s for the submitter and damages
+   * trust. Set this true only when you've confirmed the issues repo is
+   * publicly readable.
+   */
+  publicIssueTracker?: boolean
 }
 
 export interface FeedbackConfig {

@@ -18,11 +18,11 @@ Open-source feedback widget with AI classification. A drop-in React component th
 ### 1. Install the package
 
 ```bash
-npm install openfeedbacklayer
+npm install openfeedbacklayer @supabase/supabase-js
 # or
-pnpm add openfeedbacklayer
+pnpm add openfeedbacklayer @supabase/supabase-js
 # or
-yarn add openfeedbacklayer
+yarn add openfeedbacklayer @supabase/supabase-js
 ```
 
 ### 2. Add the widget to your app
@@ -43,26 +43,45 @@ export default function Layout({ children }) {
 }
 ```
 
-### 3. Set up the API route
+### 3. Set up the API routes
 
-Copy the API route template to your Next.js app:
+Create the feedback route:
 
-```bash
-cp node_modules/openfeedbacklayer/src/api/feedback/route.ts app/api/feedback/route.ts
+```ts
+// app/api/feedback/route.ts
+export { feedbackPOST as POST } from 'openfeedbacklayer/server'
 ```
 
-Or create `app/api/feedback/route.ts` manually - see [API Route Template](./src/api/feedback/route.ts).
+Create the GitHub webhook route if you use subscriber journey emails:
+
+```ts
+// app/api/feedback/webhook/route.ts
+export { webhookPOST as POST } from 'openfeedbacklayer/server'
+```
 
 ### 4. Set up Supabase
 
-Run the migration in your Supabase SQL Editor:
+Run the migrations in order in your Supabase SQL Editor:
 
 ```bash
-# Copy the migration
-cat node_modules/openfeedbacklayer/supabase/migrations/001_create_feedback.sql
+ls node_modules/openfeedbacklayer/supabase/migrations
 ```
 
-Or see [Migration SQL](./supabase/migrations/001_create_feedback.sql).
+- `001_create_feedback.sql` and `002_feedback_journey.sql` are required. They
+  apply on any Postgres (no Supabase-specific objects). `001` enables and
+  forces RLS on the `feedback` table and revokes direct `anon` /
+  `authenticated` access; the bundled server route writes with the Supabase
+  service role key.
+- `004_claim_stage_rpc.sql` is required if you use the subscriber journey
+  (GitHub webhook stage emails). Without it the webhook cannot claim a stage
+  and subscriber update emails are silently not sent.
+- `003_screenshot_storage.sql` is optional: run it only if you use screenshot
+  attachments. It requires Supabase Storage.
+
+Apply them in numeric order (`001`, `002`, `004`; `003` whenever you enable
+screenshots).
+
+Or see [Migration SQL](./supabase/migrations).
 
 ### 5. Add environment variables
 
@@ -71,15 +90,25 @@ Or see [Migration SQL](./supabase/migrations/001_create_feedback.sql).
 
 # Required
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJxxx
+SUPABASE_SERVICE_ROLE_KEY=<supabase-service-role-key>
 
-# For AI classification
-GEMINI_API_KEY=AIzaSyxxx
+# For AI classification — set EITHER. OpenAI is preferred when both are
+# present (the Gemini free tier caps at 20 requests/day).
+OPENAI_API_KEY=<openai-api-key>          # uses gpt-4o-mini; override with OPENAI_MODEL
+GEMINI_API_KEY=<gemini-api-key>       # uses gemini-2.5-flash-lite
 
 # Optional: Email notifications
-RESEND_API_KEY=re_xxx
+RESEND_API_KEY=<resend-api-key>
 FEEDBACK_NOTIFY_EMAIL=you@example.com
+RESEND_FROM_EMAIL=feedback@yourdomain.com
+
+# Optional: GitHub feedback journey
+GITHUB_TOKEN=<github-token>
+GITHUB_FEEDBACK_REPO=owner/name
+GITHUB_WEBHOOK_SECRET=change-me
 ```
+
+For GitHub issue creation and subscriber email updates, install `@octokit/rest` and `resend` in the host app when those features are enabled.
 
 ## Configuration
 
@@ -93,10 +122,25 @@ FEEDBACK_NOTIFY_EMAIL=you@example.com
   primaryColor="#2563eb"            // Button color
   buttonText="Feedback"             // Tooltip text
   placeholder="Describe your issue..." // Input placeholder
+  collectEmail={true}               // Collect optional subscriber email
+  emailPlaceholder="Your email..."  // Email input placeholder
   onSubmit={(data) => {}}           // Callback after submit
   onError={(error) => {}}           // Error callback
 />
 ```
+
+## Feedback journey (GitHub + subscriber updates)
+
+Set `GITHUB_TOKEN` and `GITHUB_FEEDBACK_REPO` to auto-open a GitHub issue for each feedback item. Install `@octokit/rest` and `resend` in the host app when GitHub issue creation and subscriber emails are enabled.
+
+To email subscribers as feedback moves through the journey, configure a GitHub webhook:
+
+- URL: `/api/feedback/webhook`
+- Content type: `application/json`
+- Events: Issues
+- Secret: `GITHUB_WEBHOOK_SECRET`
+
+Subscribers receive concise updates for received, triaged, in progress, shipped, and won't fix stages. Submitter email is stored only in Supabase and is never added to the public GitHub issue. GitHub issue redaction is best-effort defense-in-depth, not a guarantee, because the issue body can still include user-typed content.
 
 ### AI Classification Output
 
@@ -149,6 +193,13 @@ CREATE TABLE feedback (
   screenshot_url TEXT,
   ai_data JSONB,
   status TEXT DEFAULT 'new',
+  submitter_email TEXT,
+  subscribe BOOLEAN DEFAULT false,
+  github_issue_number INTEGER,
+  github_issue_url TEXT,
+  github_repo TEXT,
+  journey_stage TEXT DEFAULT 'received',
+  last_emailed_stage TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -181,25 +232,113 @@ GROUP BY ai_data->>'suggested_category';
 
 ## Security
 
-- **Honeypot field** - Hidden input that bots fill, humans don't
-- **Rate limiting** - 10 requests per IP per minute
-- **Supabase RLS** - Enable Row Level Security for access control
+- **Honeypot field** - Hidden input that bots fill, humans don't (best-effort)
+- **Rate limiting** - 10 requests/IP/minute, in-memory per process. Two
+  hard limitations: (a) the header key (`x-forwarded-for` / `x-real-ip`)
+  is client-spoofable, so deploy behind a trusted proxy/CDN (Vercel,
+  Cloudflare, nginx) that overwrites it; (b) on serverless platforms
+  (Vercel Functions, Cloudflare Workers, Lambda) every cold start gets a
+  fresh process, so the cap is effectively a no-op for sustained abuse.
+  **Production deployments must front this route with a distributed
+  limiter** (Upstash Redis, Cloudflare KV, Supabase row-counter, or
+  platform-native rate-limit middleware). The in-memory variant is
+  best-effort for single-instance or long-lived containers only.
+- **Screenshot upload** - server-side magic-byte sniff (PNG / JPEG / GIF /
+  WebP) before upload, hard 5MB size cap. A `.png` that is actually
+  HTML/JS is rejected with 415, defeating stored-XSS via the public bucket.
+  The optional storage migration does not grant public upload access; uploads
+  go through the server route.
+- **Supabase RLS** - The feedback table migration enables and forces RLS,
+  revokes direct `anon` / `authenticated` table access, and expects writes to
+  go through the bundled service-role server route
+- **Server-only RPC** - `claim_feedback_stage` is REVOKEd from
+  PUBLIC/anon/authenticated; only `service_role` may call it
+- **Untrusted-text defanging** - feedback text is redacted (PII) and defanged
+  (markdown / @mention / control-char) before it enters a GitHub issue
 - **No credentials exposed** - All API keys are server-side only
 
 ## Cost
 
-Using Gemini 2.5 Flash Lite:
-- ~$0.10 per 1M input tokens
-- ~$0.40 per 1M output tokens
-- Typical feedback: ~200 tokens = **$0.00002 per feedback**
+AI classification runs on whichever provider key is set — OpenAI
+(`gpt-4o-mini`) is used when `OPENAI_API_KEY` is present, otherwise
+Gemini (`gemini-2.5-flash-lite`). Both cost a fraction of a cent per
+feedback (~200 tokens). The Gemini free tier caps at 20 requests/day,
+so OpenAI is the better choice for any real deployment.
 
 ## Tech Stack
 
 - React 18+
 - Next.js 13+ (App Router)
 - Supabase (PostgreSQL + Storage)
-- Google Gemini 2.5 Flash Lite
+- OpenAI `gpt-4o-mini` or Google Gemini 2.5 Flash Lite (AI classification)
 - Resend (optional, for emails)
+
+## Health endpoint
+
+A liveness/readiness probe for load balancers and uptime monitors. Mount via:
+
+```ts
+// app/api/feedback/health/route.ts
+export { feedbackHealthGET as GET } from 'openfeedbacklayer/server'
+```
+
+`GET /api/feedback/health` always returns `200` with the configured-integration matrix:
+
+```json
+{
+  "status": "ok",
+  "integrations": {
+    "supabase": true,
+    "gemini": true,
+    "github": true,
+    "resend": true,
+    "webhook_secret": false
+  },
+  "timestamp": "2026-05-20T18:45:00.000Z"
+}
+```
+
+No secrets are leaked — only presence/absence of each env var.
+
+## Programmatic POSTs (JSON)
+
+`POST /api/feedback` accepts **either** `multipart/form-data` (what the React widget sends so it can carry a screenshot) **or** `application/json` (what the CLI, CI, and AI-agent callers prefer):
+
+```bash
+curl -X POST https://your-app.com/api/feedback \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Dark mode broken","email":"you@x.com","subscribe":true}'
+```
+
+Same fields either way: `message` (required), `website` (honeypot — leave empty), `email`, `subscribe`, `project`. Screenshots are multipart-only (binary).
+
+## CLI
+
+The widget ships with a CLI for non-browser submissions — useful from CI,
+shell scripts, or AI agents that need to file feedback against a deployed
+endpoint without rendering React.
+
+```bash
+# Quick send (uses OFL_API_URL or defaults to http://localhost:3000/api/feedback)
+npx openfeedbacklayer send "Dark-mode toggle is broken on the settings page."
+
+# With email + subscribe to journey updates
+npx openfeedbacklayer send "Export hangs at 90%" \
+  --email you@example.com --subscribe
+
+# Pipe from stdin (great for piping AI-agent output or log snippets)
+echo "Sync failed after upgrade to 0.7.2" | npx openfeedbacklayer send
+
+# Aim at a non-local endpoint
+npx openfeedbacklayer send "..." --api-url https://app.example.com/api/feedback
+
+# Get machine-readable JSON (id, ai_data, github_issue_url, ...)
+npx openfeedbacklayer send "..." --json
+```
+
+Env vars: `OFL_API_URL`, `OFL_EMAIL`, `OFL_PROJECT`. Exit codes: `0` success,
+`1` usage error, `2` network error, `3` server error. Run
+`npx openfeedbacklayer --help` for the full reference.
 
 ## License
 

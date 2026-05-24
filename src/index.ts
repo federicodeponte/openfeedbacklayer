@@ -16,4 +16,5 @@ export type {
   FeedbackAIData,
   FeedbackWidgetProps,
   FeedbackConfig,
+  JourneyStage,
 } from './lib/types'
