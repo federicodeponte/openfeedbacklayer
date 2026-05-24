@@ -29,14 +29,36 @@ interface FeedbackAIDataLike {
  */
 const QUOTE_CLAMP = 280
 
+const HOST_ACCENT = 'var(--accent, #2f7a59)'
+
 const DEFAULT_COLORS = {
-  primary: '#2563eb', // blue-600
-  primaryHover: '#1d4ed8', // blue-700
-  success: '#16a34a', // green-600
-  text: '#1f2937', // gray-800
-  textMuted: '#6b7280', // gray-500
-  bg: '#ffffff',
-  border: '#e5e7eb', // gray-200
+  primary: `var(--ofl-accent, ${HOST_ACCENT})`,
+  success: 'var(--ofl-accent, var(--accent, #2f7a59))',
+  text: 'var(--ofl-ink, var(--ink, #1a1a1a))',
+  textSoft: 'var(--ofl-ink-soft, var(--ink-soft, rgba(26,26,26,.66)))',
+  textMuted: 'var(--ofl-ink-mute, var(--ink-mute, rgba(26,26,26,.45)))',
+  textFaint: 'var(--ofl-ink-faint, var(--ink-faint, rgba(26,26,26,.26)))',
+  bg: 'var(--ofl-paper, var(--paper, #ffffff))',
+  bgSubtle: 'var(--ofl-bg, var(--bg, #f7f7f6))',
+  paperSubtle: 'var(--ofl-paper-2, var(--paper-2, #fbfbfa))',
+  border: 'var(--ofl-line, var(--line, rgba(20,20,20,.08)))',
+  borderStrong: 'var(--ofl-line-strong, var(--line-strong, rgba(20,20,20,.14)))',
+  borderSoft: 'var(--ofl-line-soft, var(--line-soft, rgba(20,20,20,.045)))',
+  accentSoft: 'var(--ofl-accent-soft, var(--accent-soft, rgba(47,122,89,.10)))',
+  accentLine: 'var(--ofl-accent-line, var(--accent-line, rgba(47,122,89,.26)))',
+  solid: 'var(--ofl-solid, var(--solid, #1a1a1a))',
+  solidHover: 'var(--ofl-solid-2, var(--solid-2, #2c2c2c))',
+  solidFg: 'var(--ofl-solid-fg, var(--solid-fg, #fbfbfb))',
+  negative: 'var(--negative, #c0392b)',
+  shadowSm: 'var(--shadow-sm, 0 1px 2px rgba(20,20,20,.05), 0 0 0 1px rgba(20,20,20,.05), inset 0 1px 0 rgba(255,255,255,.70))',
+  shadowMd: 'var(--shadow-md, 0 6px 20px -8px rgba(20,20,20,.13), 0 0 0 1px rgba(20,20,20,.05), inset 0 1px 0 rgba(255,255,255,.70))',
+  shadowPop: 'var(--shadow-pop, 0 22px 50px -16px rgba(20,20,20,.20), 0 0 0 1px rgba(20,20,20,.06), inset 0 1px 0 rgba(255,255,255,.70))',
+  shadowBtn: 'var(--shadow-btn, 0 1px 2px rgba(20,20,20,.16), inset 0 1px 0 rgba(255,255,255,.18))',
+  focus: 'var(--ofl-focus, var(--focus, 0 0 0 2px var(--ofl-paper, var(--paper, #ffffff)), 0 0 0 4px var(--ofl-ink, var(--ink, #1a1a1a))))',
+  ease: 'var(--ease, cubic-bezier(0.22,1,0.36,1))',
+  spring: 'var(--spring, cubic-bezier(0.32,1.06,0.5,1))',
+  tFast: 'var(--t-fast, 110ms)',
+  tBase: 'var(--t-base, 190ms)',
 }
 
 const STYLES = {
@@ -45,22 +67,26 @@ const STYLES = {
     zIndex: 99999,
     // Inter first (Floom design system), system-ui as graceful fallback for
     // consumers that don't load Inter. Children inherit via fontFamily: inherit.
-    fontFamily: '"Inter", "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily: 'var(--font, var(--font-sans, "Inter", "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif))',
+    fontFeatureSettings: 'var(--font-feat, "cv11" 1, "ss01" 1, "calt" 1)',
+    color: DEFAULT_COLORS.text,
+    letterSpacing: 0,
     width: 48,
     height: 48,
   },
   button: {
     width: 48,
     height: 48,
-    borderRadius: '50%',
-    backgroundColor: 'var(--ofl-primary)',
-    border: 'none',
+    borderRadius: 'var(--r-pill, 999px)',
+    backgroundColor: DEFAULT_COLORS.text,
+    color: DEFAULT_COLORS.bg,
+    border: `1px solid ${DEFAULT_COLORS.borderStrong}`,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-    transition: 'transform 0.2s, box-shadow 0.2s',
+    boxShadow: DEFAULT_COLORS.shadowBtn,
+    transition: `transform ${DEFAULT_COLORS.tBase} ${DEFAULT_COLORS.spring}, box-shadow ${DEFAULT_COLORS.tBase} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   popup: {
     position: 'absolute',
@@ -69,8 +95,9 @@ const STYLES = {
     maxWidth: 'calc(100vw - 24px)',
     maxHeight: '75vh',
     backgroundColor: DEFAULT_COLORS.bg,
-    borderRadius: 12,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    borderRadius: 'var(--r-2xl, 13px)',
+    boxShadow: DEFAULT_COLORS.shadowPop,
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
@@ -84,14 +111,16 @@ const STYLES = {
   },
   title: {
     fontSize: 14,
-    fontWeight: 600,
+    fontWeight: 650,
     color: DEFAULT_COLORS.text,
+    letterSpacing: 0,
     margin: 0,
   },
   closeButton: {
     fontFamily: 'inherit',
-    background: 'none',
+    background: 'transparent',
     border: 'none',
+    borderRadius: 'var(--r-md, 7px)',
     cursor: 'pointer',
     width: 44,
     height: 44,
@@ -99,6 +128,7 @@ const STYLES = {
     color: DEFAULT_COLORS.textMuted,
     fontSize: 18,
     lineHeight: 1,
+    transition: `color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   srOnly: {
     position: 'absolute',
@@ -121,22 +151,29 @@ const STYLES = {
     minHeight: 100,
     padding: 12,
     border: `1px solid ${DEFAULT_COLORS.border}`,
-    borderRadius: 8,
+    borderRadius: 'var(--r-lg, 9px)',
+    backgroundColor: DEFAULT_COLORS.bg,
+    color: DEFAULT_COLORS.text,
     fontSize: 14,
     resize: 'vertical',
     fontFamily: 'inherit',
     boxSizing: 'border-box',
+    lineHeight: 1.5,
+    transition: `border-color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, box-shadow ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   emailInput: {
     width: '100%',
     height: 40,
     padding: '8px 12px',
     border: `1px solid ${DEFAULT_COLORS.border}`,
-    borderRadius: 8,
+    borderRadius: 'var(--r-lg, 9px)',
+    backgroundColor: DEFAULT_COLORS.bg,
+    color: DEFAULT_COLORS.text,
     fontSize: 14,
     fontFamily: 'inherit',
     boxSizing: 'border-box',
     marginTop: 8,
+    transition: `border-color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, box-shadow ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   subscribeRow: {
     display: 'flex',
@@ -156,6 +193,7 @@ const STYLES = {
     width: 14,
     height: 14,
     margin: 0,
+    accentColor: DEFAULT_COLORS.primary,
   },
   screenshotPreview: {
     marginTop: 8,
@@ -165,7 +203,7 @@ const STYLES = {
     width: '100%',
     maxHeight: 120,
     objectFit: 'cover',
-    borderRadius: 8,
+    borderRadius: 'var(--r-lg, 9px)',
     border: `1px solid ${DEFAULT_COLORS.border}`,
   },
   removeButton: {
@@ -175,9 +213,9 @@ const STYLES = {
     right: 4,
     width: 44,
     height: 44,
-    borderRadius: '50%',
+    borderRadius: 'var(--r-pill, 999px)',
     backgroundColor: 'rgba(0,0,0,0.6)',
-    color: 'white',
+    color: '#ffffff',
     border: 'none',
     cursor: 'pointer',
     display: 'flex',
@@ -195,19 +233,25 @@ const STYLES = {
     flex: 1,
     padding: '10px 16px',
     minHeight: 44,
-    borderRadius: 8,
-    border: 'none',
+    borderRadius: 'var(--r-md, 7px)',
+    border: '1px solid transparent',
     cursor: 'pointer',
     fontSize: 14,
-    fontWeight: 500,
+    fontWeight: 550,
+    letterSpacing: 0,
+    transition: `transform ${DEFAULT_COLORS.tBase} ${DEFAULT_COLORS.spring}, border-color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, box-shadow ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   primaryButton: {
-    backgroundColor: 'var(--ofl-primary)',
-    color: 'white',
+    backgroundColor: DEFAULT_COLORS.solid,
+    color: DEFAULT_COLORS.solidFg,
+    borderColor: DEFAULT_COLORS.solid,
+    boxShadow: DEFAULT_COLORS.shadowBtn,
   },
   secondaryButton: {
-    backgroundColor: DEFAULT_COLORS.border,
+    backgroundColor: DEFAULT_COLORS.bg,
     color: DEFAULT_COLORS.text,
+    borderColor: DEFAULT_COLORS.border,
+    boxShadow: DEFAULT_COLORS.shadowSm,
   },
   gotHeadline: {
     // Headline of the success state. Warm + human ("We got your message")
@@ -225,9 +269,9 @@ const STYLES = {
     // The submitter's own words, quoted back as proof of receipt.
     // Clamped at QUOTE_CLAMP chars with a "Show more" toggle to keep
     // very long submissions from blowing out the card height.
-    background: DEFAULT_COLORS.border + '40',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
+    backgroundColor: DEFAULT_COLORS.bgSubtle,
+    border: `1px solid ${DEFAULT_COLORS.border}`,
+    borderRadius: 'var(--r-xl, 11px)',
     padding: '12px 14px',
     fontSize: 13,
     lineHeight: 1.55,
@@ -235,7 +279,6 @@ const STYLES = {
     margin: '0 0 14px',
     fontStyle: 'italic',
     fontFamily: 'inherit',
-    border: 'none',
   },
   quoteShowMore: {
     background: 'transparent',
@@ -279,9 +322,9 @@ const STYLES = {
     // they can see it landed. Left-aligned, lighter than the main quote.
     display: 'block',
     textAlign: 'left',
-    background: '#f0fdf4',
-    border: '1px solid #bbf7d0',
-    borderRadius: 8,
+    background: DEFAULT_COLORS.accentSoft,
+    border: `1px solid ${DEFAULT_COLORS.accentLine}`,
+    borderRadius: 'var(--r-lg, 9px)',
     padding: '8px 10px',
     margin: '0 0 10px',
   },
@@ -291,7 +334,7 @@ const STYLES = {
     fontWeight: 600,
     letterSpacing: '0.06em',
     textTransform: 'uppercase',
-    color: '#16a34a',
+    color: DEFAULT_COLORS.primary,
     marginBottom: 3,
   },
   addedDetailText: {
@@ -307,9 +350,9 @@ const STYLES = {
   checkmark: {
     width: 48,
     height: 48,
-    borderRadius: '50%',
+    borderRadius: 'var(--r-pill, 999px)',
     backgroundColor: DEFAULT_COLORS.success,
-    color: 'white',
+    color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -319,9 +362,9 @@ const STYLES = {
   errorMark: {
     width: 48,
     height: 48,
-    borderRadius: '50%',
-    backgroundColor: '#dc2626',
-    color: 'white',
+    borderRadius: 'var(--r-pill, 999px)',
+    backgroundColor: DEFAULT_COLORS.negative,
+    color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -373,9 +416,10 @@ const STYLES = {
     flex: 1,
     minWidth: 0,
     border: `1px solid ${DEFAULT_COLORS.border}`,
-    borderRadius: 8,
+    borderRadius: 'var(--r-lg, 9px)',
     backgroundColor: DEFAULT_COLORS.bg,
     color: DEFAULT_COLORS.text,
+    transition: `border-color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, box-shadow ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   addEmailSubmit: {
     flex: 0,
@@ -415,17 +459,18 @@ const STYLES = {
     minHeight: 60,
     padding: '8px 10px',
     border: `1px solid ${DEFAULT_COLORS.border}`,
-    borderRadius: 8,
+    borderRadius: 'var(--r-lg, 9px)',
     backgroundColor: DEFAULT_COLORS.bg,
     color: DEFAULT_COLORS.text,
     fontFamily: 'inherit',
     fontSize: 13,
     lineHeight: 1.5,
     resize: 'vertical',
+    transition: `border-color ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, box-shadow ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}, background ${DEFAULT_COLORS.tFast} ${DEFAULT_COLORS.ease}`,
   },
   refineError: {
     fontSize: 12,
-    color: '#dc2626',
+    color: DEFAULT_COLORS.negative,
     marginTop: 6,
     marginBottom: 0,
   },
@@ -545,7 +590,7 @@ function styleToDeclarations(style: React.CSSProperties) {
 
 function sanitizeCssCustomPropertyValue(value: string) {
   if (/[;{}<>]|\/\*|\*\//.test(value)) {
-    return DEFAULT_COLORS.primary
+    return HOST_ACCENT
   }
 
   return value
@@ -555,8 +600,8 @@ function buildScopedCss(instanceId: string, primaryColor: string) {
   const scope = `ofl-${instanceId}`
   const rules = Object.entries(STYLES).map(([name, style]) => {
     const declarations = styleToDeclarations(style)
-    const customProperty = name === 'container'
-      ? ` --ofl-primary: ${sanitizeCssCustomPropertyValue(primaryColor)};`
+    const customProperty = name === 'container' && primaryColor !== DEFAULT_COLORS.primary
+      ? ` --ofl-accent: ${sanitizeCssCustomPropertyValue(primaryColor)};`
       : ''
 
     return `.${scope}-${name} { ${declarations}${customProperty} }`
@@ -565,6 +610,20 @@ function buildScopedCss(instanceId: string, primaryColor: string) {
   for (const [name, style] of Object.entries(POSITION_STYLES)) {
     rules.push(`.${scope}-${name} { ${styleToDeclarations(style)} }`)
   }
+
+  rules.push(
+    `.${scope}-button:hover { transform: translateY(-1px); box-shadow: ${DEFAULT_COLORS.shadowPop}; }`,
+    `.${scope}-button:active { transform: scale(.965); }`,
+    `.${scope}-button:focus-visible { outline: none; box-shadow: ${DEFAULT_COLORS.focus}; }`,
+    `.${scope}-actionButton:hover:not(:disabled) { transform: translateY(-1px); }`,
+    `.${scope}-primaryButton:hover:not(:disabled) { background: ${DEFAULT_COLORS.solidHover}; border-color: ${DEFAULT_COLORS.solidHover}; }`,
+    `.${scope}-secondaryButton:hover:not(:disabled) { background: ${DEFAULT_COLORS.bgSubtle}; border-color: ${DEFAULT_COLORS.borderStrong}; }`,
+    `.${scope}-actionButton:active:not(:disabled) { transform: scale(.98); }`,
+    `.${scope}-actionButton:focus-visible, .${scope}-closeButton:focus-visible, .${scope}-quoteShowMore:focus-visible, .${scope}-refineToggle:focus-visible, .${scope}-textarea:focus, .${scope}-emailInput:focus, .${scope}-addEmailInput:focus, .${scope}-refineTextarea:focus { outline: none; box-shadow: ${DEFAULT_COLORS.focus}; border-color: ${DEFAULT_COLORS.borderStrong}; }`,
+    `.${scope}-textarea::placeholder, .${scope}-emailInput::placeholder, .${scope}-addEmailInput::placeholder, .${scope}-refineTextarea::placeholder { color: ${DEFAULT_COLORS.textMuted}; }`,
+    `.${scope}-actionButton:disabled, .${scope}-textarea:disabled, .${scope}-emailInput:disabled, .${scope}-addEmailInput:disabled, .${scope}-refineTextarea:disabled { cursor: not-allowed; }`,
+    `.${scope}-closeButton:hover { color: ${DEFAULT_COLORS.text}; background: ${DEFAULT_COLORS.bgSubtle}; border-radius: var(--r-md, 7px); }`,
+  )
 
   return rules.join('\n')
 }
@@ -975,7 +1034,7 @@ export function FeedbackWidget({
           height="22"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="white"
+          stroke="currentColor"
           strokeWidth="1.75"
           strokeLinecap="round"
           strokeLinejoin="round"
